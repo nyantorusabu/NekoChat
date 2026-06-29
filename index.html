@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+		<link rel="stylesheet" href="./style.css" />
+		<title>NekoChat</title>
+	</head>
+	<body>
+		<div id="app">
+			<div id="sidebar">
+				<button
+					class="mobileCloseBtn"
+					id="sidebarCloseBtn"
+					aria-label="閉じる"
+				>
+					<svg
+						style="
+							width: 20px;
+							height: 20px;
+							fill: none;
+							stroke: currentColor;
+							stroke-width: 2;
+							stroke-linecap: round;
+							stroke-linejoin: round;
+						"
+						viewBox="0 0 24 24"
+					>
+						<path d="M18 6L6 18M6 6l12 12" />
+					</svg>
+				</button>
+				<button id="newRoomBtn" class="primary">
+					+ スペースを作る
+				</button>
+				<button id="socialBtn">既知のユーザー</button>
+				<div id="sidebarEmpty" style="display: none">
+					まだスペースがありません
+				</div>
+				<div id="roomList"></div>
+				<div id="sidebarFooter">
+					<div class="avatar" id="myAvatar"></div>
+					<div class="uname" id="myName"></div>
+					<span class="gear"
+						><svg
+							style="
+								width: 14px;
+								height: 14px;
+								vertical-align: -2px;
+								fill: none;
+								stroke: currentColor;
+								stroke-width: 1.7;
+								stroke-linecap: round;
+								stroke-linejoin: round;
+							"
+							viewBox="0 0 24 24"
+						>
+							<circle cx="12" cy="12" r="3" />
+							<path
+								d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+							/></svg
+					></span>
+				</div>
+			</div>
+
+			<div id="mainPanel">
+				<button id="sidebarToggleBtn" aria-label="メニュー">
+					<svg
+						style="
+							width: 24px;
+							height: 24px;
+							fill: none;
+							stroke: currentColor;
+							stroke-width: 2;
+							stroke-linecap: round;
+							stroke-linejoin: round;
+						"
+						viewBox="0 0 24 24"
+					>
+						<g class="icon-menu">
+							<path d="M3 12h18M3 6h18M3 18h18" />
+						</g>
+						<g class="icon-close">
+							<path d="M18 6L6 18M6 6l12 12" />
+						</g>
+					</svg>
+				</button>
+
+				<div id="emptyState">
+					左メニューからスペースを選択するか、作成してください。
+				</div>
+
+				<div id="roomView">
+					<div id="header">
+						<div id="headerInfo">
+							<span id="headerName"></span>
+							<span id="headerTag"></span>
+						</div>
+						<span id="onlineBadge">...</span>
+						<span id="connStatus" class="bad">未接続</span>
+						<div class="hspacer"></div>
+						<div class="vcBtns">
+							<button id="vcJoinBtn">
+								<svg
+									style="
+										width: 13px;
+										height: 13px;
+										vertical-align: -2px;
+										fill: none;
+										stroke: currentColor;
+										stroke-width: 1.8;
+										stroke-linecap: round;
+										stroke-linejoin: round;
+									"
+									viewBox="0 0 24 24"
+								>
+									<rect
+										x="9"
+										y="2"
+										width="6"
+										height="11"
+										rx="3"
+									/>
+									<path d="M5 10a7 7 0 0 0 14 0" />
+									<line x1="12" y1="19" x2="12" y2="22" />
+									<line x1="8" y1="22" x2="16" y2="22" />
+								</svg>
+							</button>
+						</div>
+
+						<div id="userPopover">
+							<h4>オンライン</h4>
+							<ul id="userPopoverList"></ul>
+						</div>
+					</div>
+
+					<div id="roomBody">
+						<div id="voiceScreen">
+							<div id="voiceMain">
+								<div id="videoStage">
+									<div id="featuredVideo"></div>
+									<div id="thumbRow"></div>
+								</div>
+								<div id="participantList"></div>
+							</div>
+							<div id="voiceToolbar">
+								<button
+									class="vcIconBtn danger"
+									id="vcLeaveBtn"
+									data-tip="切断"
+								>
+									<svg viewBox="0 0 24 24">
+										<path
+											d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.42 19.42 0 0 1 4.26 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.17 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.15 9.9a16 16 0 0 0 2.6 3.41z"
+											stroke-width="1.7"
+										/>
+										<line
+											x1="1"
+											y1="1"
+											x2="23"
+											y2="23"
+											stroke-width="1.7"
+										/>
+									</svg>
+								</button>
+								<div class="vcToolSep"></div>
+								<button
+									class="vcIconBtn"
+									id="vcMuteBtn"
+									data-tip="マイク"
+								>
+									<svg viewBox="0 0 24 24">
+										<rect
+											x="9"
+											y="2"
+											width="6"
+											height="11"
+											rx="3"
+										/>
+										<path d="M5 10a7 7 0 0 0 14 0" />
+										<line x1="12" y1="19" x2="12" y2="22" />
+										<line x1="8" y1="22" x2="16" y2="22" />
+									</svg>
+								</button>
+								<button
+									class="vcIconBtn"
+									id="vcCamBtn"
+									data-tip="カメラ"
+								>
+									<svg viewBox="0 0 24 24">
+										<path d="M23 7l-7 5 7 5V7z" />
+										<rect
+											x="1"
+											y="5"
+											width="15"
+											height="14"
+											rx="2"
+										/>
+									</svg>
+								</button>
+								<button
+									class="vcIconBtn"
+									id="vcShareBtn"
+									data-tip="画面共有"
+								>
+									<svg viewBox="0 0 24 24">
+										<rect
+											x="2"
+											y="3"
+											width="20"
+											height="14"
+											rx="2"
+										/>
+										<polyline points="8 21 12 17 16 21" />
+										<line x1="12" y1="17" x2="12" y2="21" />
+									</svg>
+								</button>
+								<div class="vcToolSep"></div>
+								<button
+									class="vcIconBtn"
+									id="vcCaptionBtn"
+									data-tip="字幕"
+								>
+									<svg viewBox="0 0 24 24">
+										<rect
+											x="2"
+											y="4"
+											width="20"
+											height="16"
+											rx="2"
+										/>
+										<line x1="6" y1="10" x2="18" y2="10" />
+										<line x1="6" y1="14" x2="14" y2="14" />
+									</svg>
+								</button>
+								<button
+									class="vcIconBtn"
+									id="vcTtsBtn"
+									data-tip="読み上げ"
+								>
+									<svg viewBox="0 0 24 24">
+										<polygon
+											points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"
+										/>
+										<path
+											d="M19.07 4.93a10 10 0 0 1 0 14.14"
+										/>
+										<path
+											d="M15.54 8.46a5 5 0 0 1 0 7.07"
+										/>
+									</svg>
+								</button>
+
+								<!-- チャット開閉ボタン -->
+								<div class="vcToolSep"></div>
+								<button
+									class="vcIconBtn"
+									id="vcChatBtn"
+									data-tip="チャット"
+								>
+									<svg viewBox="0 0 24 24">
+										<path
+											d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+										/>
+									</svg>
+								</button>
+							</div>
+						</div>
+						<div id="chatColumn">
+							<button
+								class="mobileCloseBtn"
+								id="chatCloseBtn"
+								aria-label="閉じる"
+							>
+								<svg
+									style="
+										width: 20px;
+										height: 20px;
+										fill: none;
+										stroke: currentColor;
+										stroke-width: 2;
+										stroke-linecap: round;
+										stroke-linejoin: round;
+									"
+									viewBox="0 0 24 24"
+								>
+									<path d="M18 6L6 18M6 6l12 12" />
+								</svg>
+							</button>
+							<div id="log"></div>
+							<div id="typingIndicator"></div>
+							<div id="replyPreviewBar">
+								<div class="replyBarLine">
+									<span
+										class="replyBarName"
+										id="replyBarName"
+									></span>
+									<span
+										class="replyBarText"
+										id="replyBarText"
+									></span>
+								</div>
+								<button
+									class="replyBarClose"
+									id="replyBarClose"
+									title="返信をキャンセル"
+								>
+									×
+								</button>
+							</div>
+							<div id="composer">
+								<button id="btnAttach" title="ファイルを送信">
+									<svg
+										style="
+											width: 14px;
+											height: 14px;
+											fill: none;
+											stroke: currentColor;
+											stroke-width: 1.8;
+											stroke-linecap: round;
+											stroke-linejoin: round;
+										"
+										viewBox="0 0 24 24"
+									>
+										<path
+											d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+										/>
+									</svg>
+								</button>
+								<input type="file" id="fileInput" />
+								<textarea
+									id="msgInput"
+									placeholder="メッセージを入力"
+									rows="1"
+								></textarea>
+								<button id="btnSend" class="primary">
+									送信
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- スペース作成 / 招待参加 -->
+			<div class="overlay" id="ovCreate">
+				<div class="modal">
+					<div class="modalTabs">
+						<button id="tabCreate" class="active">
+							新しいスペース
+						</button>
+						<button id="tabJoin">招待リンクで参加</button>
+					</div>
+					<div id="paneCreate">
+						<div class="field">
+							<label>スペース名</label>
+							<input
+								type="text"
+								id="crName"
+								maxlength="40"
+								placeholder="例: 雑談"
+							/>
+						</div>
+						<label class="toggleRow">
+							一時チャット
+							<span class="switch"
+								><input type="checkbox" id="crPersist" /><span
+									class="slider"
+								></span
+							></span>
+						</label>
+						<div class="actions">
+							<button id="crCancel">キャンセル</button>
+							<button id="crSubmit" class="primary">
+								作成して入室
+							</button>
+						</div>
+					</div>
+					<div id="paneJoin" style="display: none">
+						<div class="field">
+							<label>招待リンクまたはスペースID</label>
+							<input
+								type="text"
+								id="jnLink"
+								placeholder="https://.../#r=xxxxxxxx"
+							/>
+						</div>
+						<div class="actions">
+							<button id="jnCancel">キャンセル</button>
+							<button id="jnSubmit" class="primary">
+								参加する
+							</button>
+						</div>
+						<div class="err" id="jnErr"></div>
+					</div>
+				</div>
+			</div>
+
+			<!-- ルーム設定 -->
+			<div class="overlay" id="ovRoomSettings">
+				<div class="modal">
+					<h2>スペースの設定</h2>
+					<div class="field">
+						<label>スペース名</label>
+						<input type="text" id="rsName" maxlength="40" />
+					</div>
+					<label class="toggleRow">
+						一時チャット
+						<span class="switch"
+							><input type="checkbox" id="rsPersist" /><span
+								class="slider"
+							></span
+						></span>
+					</label>
+					<div class="field">
+						<label>招待リンク</label>
+						<div class="linkRow">
+							<input type="text" id="rsLink" readonly />
+							<button id="rsCopy">コピー</button>
+						</div>
+					</div>
+					<div class="actions">
+						<button id="rsCancel">閉じる</button>
+						<button id="rsSave" class="primary">保存</button>
+					</div>
+					<hr class="sep" />
+					<button id="rsLeave" class="danger" style="width: 100%">
+						このスペースから退出する
+					</button>
+				</div>
+			</div>
+
+			<!-- プロフィール設定 -->
+			<div class="overlay" id="ovProfile">
+				<div class="modal">
+					<h2 id="pfTitle">ユーザー設定</h2>
+					<p
+						id="pfSubtitle"
+						class="hint"
+						style="
+							margin-top: -8px;
+							margin-bottom: 10px;
+							display: none;
+						"
+					>
+						ユーザー情報を入力してください。
+					</p>
+					<div class="field">
+						<label>ユーザー名</label>
+						<input type="text" id="pfName" maxlength="20" />
+					</div>
+					<div class="field">
+						<label>アイコン</label>
+						<div class="avatarRow">
+							<div class="avatar" id="pfAvatarPreview"></div>
+							<input
+								type="file"
+								id="pfImageInput"
+								accept="image/*"
+							/>
+							<button type="button" id="pfImagePick">
+								画像を選択
+							</button>
+							<button type="button" id="pfImageClear">
+								既定に戻す
+							</button>
+						</div>
+					</div>
+					<div class="actions">
+						<button id="pfCancel">閉じる</button>
+						<button id="pfSave" class="primary">保存</button>
+					</div>
+					<hr class="sep" id="pfResetSep" />
+					<button id="pfReset" class="danger" style="width: 100%">
+						リセット
+					</button>
+					<div class="hint" id="pfResetHint">
+						全てのルームから退出しユーザー情報をリセットします。
+					</div>
+				</div>
+			</div>
+
+			<!-- ユーザーアクションモーダル -->
+			<div class="overlay" id="ovUserModal">
+				<div class="modal" style="width: 320px">
+					<h2 id="umTitle">ユーザー情報</h2>
+					<div
+						style="
+							display: flex;
+							align-items: center;
+							gap: 12px;
+							margin: 12px 0;
+						"
+					>
+						<div
+							class="avatar"
+							id="umAvatar"
+							style="width: 48px; height: 48px; font-size: 18px"
+						></div>
+						<div style="flex: 1; min-width: 0">
+							<div
+								id="umName"
+								style="font-weight: 600; font-size: 14px"
+							></div>
+							<div
+								id="umUid"
+								style="
+									font-size: 10px;
+									color: var(--sub);
+									font-family: var(--mono);
+									word-break: break-all;
+									cursor: pointer;
+								"
+								title="クリックでコピー"
+							></div>
+						</div>
+					</div>
+					<div class="field">
+						<label>ニックネーム</label>
+						<input
+							type="text"
+							id="umNickname"
+							maxlength="20"
+							placeholder="未設定"
+						/>
+					</div>
+					<div
+						style="
+							margin-top: 12px;
+							display: flex;
+							flex-direction: column;
+							gap: 8px;
+						"
+					>
+						<label class="toggleRow" style="margin-top: 0">
+							ミュート
+							<span class="switch"
+								><input type="checkbox" id="umMute" /><span
+									class="slider"
+								></span
+							></span>
+						</label>
+					</div>
+					<div class="actions" style="margin-top: 16px">
+						<button id="umClose">閉じる</button>
+						<button id="umSave" class="primary">保存</button>
+					</div>
+					<hr class="sep" />
+					<button id="umDelete" class="danger" style="width: 100%">
+						このユーザーの情報を削除
+					</button>
+				</div>
+			</div>
+
+			<!-- ソーシャル (既知ユーザー一覧) -->
+			<div class="overlay" id="ovSocial">
+				<div
+					class="modal"
+					style="width: 360px; max-height: 70vh; overflow-y: auto"
+				>
+					<h2>既知のユーザー</h2>
+					<div
+						id="socialList"
+						style="
+							max-height: 50vh;
+							overflow-y: auto;
+							margin-bottom: 12px;
+						"
+					></div>
+					<div class="actions">
+						<button id="socialClose">閉じる</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- ボイスチャット参加設定モーダル -->
+			<div class="overlay" id="ovVoiceJoin">
+				<div class="modal" style="width: 380px">
+					<h2>ボイスチャットに参加</h2>
+					<div class="field">
+						<label class="toggleRow" style="margin-top: 8px"
+							><span>マイクを有効にする</span
+							><span class="switch"
+								><input type="checkbox" id="vjMicEnable" /><span
+									class="slider"
+								></span></span
+						></label>
+						<label class="toggleRow" style="margin-top: 8px"
+							><span>カメラを有効にする</span
+							><span class="switch"
+								><input type="checkbox" id="vjCamEnable" /><span
+									class="slider"
+								></span></span
+						></label>
+					</div>
+					<div class="field">
+						<label>マイクデバイス</label>
+						<select id="vjMicSelect" style="width: 100%"></select>
+						<label>カメラデバイス</label>
+						<select id="vjCamSelect" style="width: 100%"></select>
+					</div>
+					<div class="actions" style="margin-top: 16px">
+						<button id="vjCancel">キャンセル</button>
+						<button id="vjJoin" class="primary">参加する</button>
+					</div>
+					<div class="err" id="vjErr" style="min-height: 18px"></div>
+				</div>
+			</div>
+
+			<!-- ファイルプレビュー -->
+			<div class="overlay" id="ovFilePreview">
+				<div class="modal">
+					<button
+						class="mobileCloseBtn"
+						id="filePreviewClose"
+						aria-label="閉じる"
+					>
+						<svg
+							style="
+								width: 20px;
+								height: 20px;
+								fill: none;
+								stroke: currentColor;
+								stroke-width: 2;
+								stroke-linecap: round;
+								stroke-linejoin: round;
+							"
+							viewBox="0 0 24 24"
+						>
+							<path d="M18 6L6 18M6 6l12 12" />
+						</svg>
+					</button>
+					<h2 id="filePreviewTitle">ファイル</h2>
+					<div id="filePreviewMeta" class="hint"></div>
+					<div id="filePreviewStage"></div>
+					<div class="actions">
+						<button id="filePreviewDownload" class="primary">
+							ダウンロード
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- メディア全画面 -->
+			<div class="overlay" id="ovMediaFullscreen">
+				<div class="modal">
+					<div class="mediaTop">
+						<div class="title" id="mediaFullscreenTitle"></div>
+						<button id="mediaFullscreenClose" aria-label="閉じる">
+							<svg
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M18 6L6 18M6 6l12 12" />
+							</svg>
+						</button>
+					</div>
+					<div class="mediaStage" id="mediaFullscreenStage"></div>
+				</div>
+			</div>
+
+			<!-- showAlert / showConfirm 共通モーダル -->
+			<div class="overlay" id="ovDialog">
+				<div class="modal" style="width: 320px">
+					<h2 id="dialogTitle"></h2>
+					<p
+						id="dialogMessage"
+						style="
+							font-size: 13px;
+							color: var(--sub);
+							margin: 0 0 4px;
+						"
+					></p>
+					<div class="actions" id="dialogActions"></div>
+				</div>
+			</div>
+
+			<div id="toast"></div>
+			<div id="mediaPool"></div>
+		</div>
+
+		<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+		<script src="./main.js"></script>
+	</body>
+</html>
