@@ -1,0 +1,1477 @@
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link
+			rel="icon"
+			type="image/svg+xml"
+			href="data:image/svg+xml,%3Csvg%20version%3D%221.1%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20xmlns%3Axlink%3D%22http%3A//www.w3.org/1999/xlink%22%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%2C0%2C20%2C20%22%3E%3Cg%20transform%3D%22translate%28-230%2C-170%29%22%3E%3Cg%20stroke-miterlimit%3D%2210%22%3E%3Cpath%20d%3D%22M231%2C173c0%2C-1.10457%200.89543%2C-2%202%2C-2h14c1.10457%2C0%202%2C0.89543%202%2C2v16l-4%2C-4h-12c-1.10457%2C0%20-2%2C-0.89543%20-2%2C-2z%22%20fill%3D%22%23baffff%22%20stroke%3D%22%23baffff%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3Cpath%20d%3D%22M241.3644%2C183.27132l-0.05075%2C0c-0.04438%2C0.00629%20-0.09301%2C0.00775%20-0.14314%2C0.00003c-3.69737%2C0.00243%20-6.27355%2C0.13068%20-9.31953%2C-2.30997c-1.31019%2C-3.08858%200.36691%2C-4.14246%201.90771%2C-6.34224c0.4347%2C-0.62061%201.37917%2C-2.34294%202.37063%2C-1.88365c1.32876%2C0.61554%20-0.14092%2C2.59179%201.78138%2C2.53252c1.15077%2C0%203.32253%2C0.45668%204.35857%2C0.0649c1.22536%2C-0.46337%201.09316%2C-3.4877%203.34326%2C-2.70067c0.81564%2C0.28529%201.95912%2C3.2779%202.41643%2C4.02975c1.28152%2C2.19202%200.45223%2C5.59401%20-2.214%2C6.30338c-1.20658%2C0.32102%20-2.87971%2C-0.39943%20-4.02832%2C0.09444c-0.1405%2C0.21151%20-0.42226%2C0.21151%20-0.42226%2C0.21151zM247.5799%2C178.93388c0.00042%2C-0.65826%20-0.05633%2C-1.19064%20-0.40843%2C-1.7574c-0.35176%2C-0.59638%20-1.48119%2C-3.42993%20-1.99662%2C-3.64511c-0.86563%2C-0.36139%20-1.88265%2C2.41362%20-2.41289%2C2.67174c-1.12446%2C0.54739%20-3.60007%2C0.0649%20-4.85127%2C0.0649c-1.62117%2C-0.03395%20-2.30425%2C-1.14194%20-2.24792%2C-2.64802c0.00871%2C-0.23289%20-0.18865%2C0.42956%20-0.32248%2C0.62036c-0.3342%2C0.47648%20-0.70817%2C0.9956%20-1.0648%2C1.45162c-1.31985%2C1.68766%20-2.51674%2C2.12315%20-1.6255%2C4.66811c2.81614%2C2.102%205.13888%2C1.9161%208.4956%2C1.91133c2.39964%2C-1.18949%206.43158%2C0.96759%206.4343%2C-3.33752z%22%20fill%3D%22%23000000%22%20stroke%3D%22none%22%20stroke-width%3D%220.5%22%20stroke-linecap%3D%22butt%22%20stroke-linejoin%3D%22miter%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"
+		/>
+		<title>NekoChat(Offline)</title>
+		<style>
+			:root {
+				--bg: #fafaf8;
+				--panel: #ffffff;
+				--line: #dcdcd6;
+				--line2: #ececea;
+				--text: #1d1d1b;
+				--sub: #7a7a73;
+				--accent: #3a6e5a;
+				--accent-weak: #e7efe9;
+				--danger: #a3433a;
+				--mono:
+					ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+				--sans:
+					-apple-system, 'Hiragino Kaku Gothic ProN', 'Yu Gothic',
+					system-ui, sans-serif;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				height: 100%;
+			}
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--text);
+				font-family: var(--sans);
+				font-size: 14px;
+				line-height: 1.55;
+			}
+			a {
+				color: var(--accent);
+			}
+
+			#app {
+				height: 100%;
+				display: flex;
+				overflow: hidden;
+			}
+
+			/* ---------- sidebar ---------- */
+			#sidebar {
+				width: 230px;
+				flex-shrink: 0;
+				border-right: 1px solid var(--line);
+				background: var(--panel);
+				display: flex;
+				flex-direction: column;
+				position: relative;
+				transition:
+					margin 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+					transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+			}
+			#sidebarHeader {
+				padding: 14px 14px 8px;
+				font-size: 12px;
+				font-weight: 700;
+				color: var(--sub);
+				letter-spacing: 0.04em;
+				display: flex;
+				align-items: center;
+				gap: 6px;
+			}
+			#sidebarHeader .badge {
+				font-size: 9.5px;
+				font-weight: 600;
+				background: var(--accent-weak);
+				color: var(--accent);
+				padding: 1px 6px;
+				border-radius: 999px;
+			}
+			#roomList {
+				flex: 1;
+				overflow-y: auto;
+				padding: 4px 8px;
+			}
+			.roomItem {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 9px 8px;
+				border-radius: 4px;
+				cursor: pointer;
+				font-size: 12.5px;
+				margin-bottom: 2px;
+				color: var(--text);
+			}
+			.roomItem:hover {
+				background: var(--accent-weak);
+			}
+			.roomItem.active {
+				background: var(--accent-weak);
+				border: 1px solid var(--accent);
+			}
+			.roomItem .ricon {
+				width: 7px;
+				height: 7px;
+				border-radius: 50%;
+				background: #ccc;
+				flex-shrink: 0;
+			}
+			.roomItem.active .ricon {
+				background: var(--accent);
+			}
+			.roomItem .rname {
+				flex: 1;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.roomItem .rtag {
+				font-size: 10px;
+				color: var(--sub);
+			}
+			#sidebarEmpty {
+				padding: 14px 14px;
+				font-size: 11.5px;
+				color: var(--sub);
+			}
+
+			#sidebarFooter {
+				border-top: 1px solid var(--line);
+				min-height: 56px;
+				padding: 10px 12px;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.avatar {
+				width: 28px;
+				height: 28px;
+				border-radius: 50%;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-size: 12px;
+				flex-shrink: 0;
+				color: #fff;
+				overflow: hidden;
+				font-weight: 600;
+			}
+			.avatar img {
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+				display: block;
+			}
+			#sidebarFooter .uname {
+				flex: 1;
+				font-size: 12.5px;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			#sidebarFooter .sub {
+				font-size: 10px;
+				color: var(--sub);
+			}
+
+			/* ---------- main ---------- */
+			#mainPanel {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				min-width: 0;
+				position: relative;
+			}
+			#emptyState {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				color: var(--sub);
+				font-size: 13px;
+				text-align: center;
+				padding: 20px;
+				gap: 16px;
+			}
+			#emptyStateNotice {
+				max-width: 420px;
+			}
+			.retryBtn {
+				display: inline-block;
+				background: var(--accent);
+				color: #fff;
+				font-size: 13px;
+				font-weight: 600;
+				text-decoration: none;
+				padding: 9px 22px;
+				border-radius: 5px;
+				line-height: 1.4;
+			}
+			.retryBtn:hover {
+				opacity: 0.9;
+			}
+			#roomView {
+				flex: 1;
+				display: none;
+				flex-direction: column;
+				min-height: 0;
+			}
+			#header {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				padding: 12px 18px 12px 52px;
+				border-bottom: 1px solid var(--line);
+				background: var(--panel);
+				flex-wrap: wrap;
+			}
+			#headerName {
+				font-size: 13.5px;
+				font-weight: 600;
+			}
+			#headerTag {
+				font-size: 10.5px;
+				color: var(--sub);
+				margin-left: 4px;
+			}
+			#headerNote {
+				margin-left: auto;
+				font-size: 11px;
+				color: var(--sub);
+			}
+
+			#log {
+				flex: 1;
+				overflow-y: auto;
+				padding: 16px 20px;
+			}
+			#logEmpty {
+				color: var(--sub);
+				font-size: 12.5px;
+				text-align: center;
+				padding: 30px 0;
+			}
+
+			.daySep {
+				text-align: center;
+				color: var(--sub);
+				font-size: 11px;
+				margin: 18px 0 10px;
+			}
+
+			.msg {
+				margin-bottom: 12px;
+				max-width: 640px;
+				display: flex;
+				gap: 10px;
+				align-items: flex-start;
+			}
+			.msg .msgAvatar {
+				width: 32px;
+				height: 32px;
+				font-size: 11px;
+				flex-shrink: 0;
+			}
+			.msg .msgContent {
+				flex: 1;
+				min-width: 0;
+			}
+			.msg .meta {
+				font-size: 11px;
+				color: var(--sub);
+				margin-bottom: 2px;
+			}
+			.msg .meta .name {
+				color: var(--text);
+				font-weight: 600;
+			}
+			.msg .meta .msgUid {
+				font-family: var(--mono);
+				opacity: 0.7;
+			}
+			.msg .body {
+				font-size: 13.5px;
+				white-space: pre-wrap;
+				word-break: break-word;
+			}
+			/* 長文折りたたみ */
+			.msg .body.collapsed {
+				/* line-height: 1.55 × 5行 = 7.75em */
+				max-height: calc(1.55em * 5);
+				overflow: hidden;
+				position: relative;
+			}
+			.msg .body.collapsed::after {
+				content: '';
+				position: absolute;
+				bottom: 0;
+				left: 0;
+				right: 0;
+				height: 2em;
+				background: linear-gradient(transparent, var(--panel));
+				pointer-events: none;
+			}
+			.showMoreBtn {
+				display: block;
+				margin-top: 4px;
+				font-size: 12px;
+				color: var(--accent);
+				background: none;
+				border: none;
+				padding: 0;
+				cursor: pointer;
+				text-decoration: underline;
+				text-underline-offset: 2px;
+			}
+			.showMoreBtn:hover {
+				opacity: 0.75;
+				background: none;
+				border: none;
+			}
+
+			.msg.compact {
+				margin-bottom: 2px;
+			}
+			.msg.compact .msgAvatar {
+				visibility: hidden;
+				pointer-events: none;
+			}
+			.msg.compact .meta .name,
+			.msg.compact .meta .msgUid {
+				display: none;
+			}
+			.msg.compact .meta {
+				font-size: 0;
+				margin-bottom: 0;
+			}
+
+			.msg .body a.chatLink {
+				color: var(--accent);
+				text-decoration: underline;
+				text-underline-offset: 2px;
+				word-break: break-all;
+			}
+			.msg .body a.chatLink:hover {
+				opacity: 0.8;
+			}
+
+			.msg.system {
+				display: block;
+			}
+			.msg.system .body {
+				color: var(--sub);
+				font-size: 12px;
+				font-style: italic;
+			}
+			.msg.deleted .body {
+				color: #aaa;
+				font-style: italic;
+			}
+
+			.msg .replyQuote {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				font-size: 11.5px;
+				color: var(--sub);
+				border-left: 2px solid var(--accent);
+				padding: 2px 0 2px 8px;
+				margin-bottom: 3px;
+				max-width: 480px;
+			}
+			.msg .replyQuote .replyName {
+				color: var(--accent);
+				font-weight: 600;
+				flex-shrink: 0;
+			}
+			.msg .replyQuote .replyText {
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.msg .file {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				border: 1px solid var(--line);
+				border-radius: 3px;
+				padding: 6px 10px;
+				margin-top: 2px;
+				font-size: 12.5px;
+			}
+			.msg .file .fname {
+				font-weight: 600;
+			}
+			.msg .file .fsize {
+				color: var(--sub);
+				font-size: 11px;
+			}
+			.msg .file a.dlBtn {
+				font-size: 11px;
+				text-decoration: none;
+				border: 1px solid var(--line);
+				border-radius: 3px;
+				padding: 3px 8px;
+				color: var(--text);
+			}
+			.msg .file a.dlBtn:hover {
+				background: var(--accent-weak);
+				border-color: var(--accent);
+			}
+			.msg .file.missing {
+				color: var(--sub);
+				font-style: italic;
+			}
+
+			.msg img.preview,
+			.msg video.previewVideo {
+				max-width: min(320px, 70vw);
+				max-height: min(240px, 35vh);
+				width: auto;
+				height: auto;
+				object-fit: contain;
+				display: block;
+				margin-top: 4px;
+				border: 1px solid var(--line);
+				border-radius: 3px;
+				cursor: pointer;
+			}
+			.msg audio.previewAudio {
+				display: block;
+				margin-top: 4px;
+				width: min(320px, 80vw);
+				max-width: 100%;
+			}
+
+			/* ---------- file preview overlay ---------- */
+			.overlay {
+				display: none;
+				position: fixed;
+				inset: 0;
+				background: rgba(0, 0, 0, 0.5);
+				align-items: center;
+				justify-content: center;
+				z-index: 50;
+				padding: 20px;
+			}
+			.overlay.open {
+				display: flex;
+			}
+			.overlay .modal {
+				background: var(--panel);
+				border-radius: 6px;
+				padding: 18px;
+				max-width: min(720px, 92vw);
+				max-height: 86vh;
+				overflow: auto;
+			}
+			.overlay .modal h2 {
+				margin: 0 0 10px;
+				font-size: 15px;
+			}
+			.overlay .modal img,
+			.overlay .modal video {
+				max-width: 100%;
+				max-height: 70vh;
+				display: block;
+			}
+			.overlay .modal .closeBtn {
+				float: right;
+				border: none;
+				background: none;
+				font-size: 18px;
+				cursor: pointer;
+				color: var(--sub);
+				line-height: 1;
+			}
+
+			/* ---------- empty / load notes ---------- */
+			.loadNote {
+				font-size: 11.5px;
+				color: var(--sub);
+				padding: 8px 18px;
+				border-top: 1px solid var(--line);
+				background: var(--panel);
+			}
+
+			/* ---------- nav / close toggle buttons ---------- */
+			.mobileCloseBtn {
+				position: absolute;
+				top: 12px;
+				right: 12px;
+				width: 32px;
+				height: 32px;
+				background: var(--panel);
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				display: none;
+				align-items: center;
+				justify-content: center;
+				color: var(--text);
+				z-index: 2100;
+				cursor: pointer;
+				transition:
+					background 0.12s,
+					border-color 0.12s;
+				padding: 0;
+			}
+			.mobileCloseBtn:hover {
+				background: var(--accent-weak);
+				border-color: var(--accent);
+			}
+
+			#sidebarToggleBtn {
+				position: absolute;
+				top: 10px;
+				left: 10px;
+				z-index: 50;
+				width: 32px;
+				height: 32px;
+				background: var(--panel);
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				color: var(--text);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 0;
+				cursor: pointer;
+				transition:
+					background 0.12s,
+					border-color 0.12s;
+			}
+			#sidebarToggleBtn:hover {
+				background: var(--accent-weak);
+				border-color: var(--accent);
+			}
+			body[data-sidebar='open'] #sidebarToggleBtn {
+				background: var(--accent-weak);
+				border-color: var(--accent);
+				color: var(--accent);
+			}
+			.icon-close {
+				display: none;
+			}
+			body[data-sidebar='open'] .icon-menu {
+				display: none;
+			}
+			body[data-sidebar='open'] .icon-close {
+				display: block;
+			}
+
+			@media (min-width: 769px) {
+				body[data-sidebar='closed'] #sidebar {
+					margin-left: -230px;
+				}
+			}
+
+			/* ---------- mobile ---------- */
+			@media (max-width: 768px) {
+				#emptyState {
+					padding: 20px 16px;
+				}
+				.retryBtn {
+					width: 100%;
+					max-width: 280px;
+					text-align: center;
+				}
+				/* 左メニュー(sidebar) 全画面化 */
+				#sidebar {
+					position: fixed;
+					inset: 0;
+					width: 100%;
+					height: 100%;
+					z-index: 2000;
+					border-right: none;
+					transform: translateX(-100%);
+				}
+				body[data-sidebar='open'] #sidebar {
+					transform: translateX(0);
+				}
+				.mobileCloseBtn {
+					display: flex;
+				}
+			}
+
+			::-webkit-scrollbar {
+				width: 9px;
+				height: 9px;
+			}
+			::-webkit-scrollbar-thumb {
+				background: #d8d8d2;
+				border-radius: 999px;
+			}
+			::-webkit-scrollbar-track {
+				background: transparent;
+			}
+		</style>
+	</head>
+	<body data-sidebar="closed">
+		<div id="app">
+			<div id="sidebar">
+				<button
+					class="mobileCloseBtn"
+					id="sidebarCloseBtn"
+					aria-label="閉じる"
+				>
+					<svg
+						style="
+							width: 18px;
+							height: 18px;
+							fill: none;
+							stroke: currentColor;
+							stroke-width: 2;
+							stroke-linecap: round;
+							stroke-linejoin: round;
+						"
+						viewBox="0 0 24 24"
+					>
+						<path d="M18 6L6 18M6 6l12 12" />
+					</svg>
+				</button>
+				<div id="sidebarHeader">すべてのスペース</div>
+				<div id="sidebarEmpty" style="display: none">
+					どのスペースにも参加していません...
+				</div>
+				<div id="roomList"></div>
+				<div id="sidebarFooter">
+					<div class="avatar" id="myAvatar"></div>
+					<div style="flex: 1; min-width: 0">
+						<div class="uname" id="myName"></div>
+						<div class="sub">プロフィール編集不可</div>
+					</div>
+				</div>
+			</div>
+
+			<div id="mainPanel">
+				<button id="sidebarToggleBtn" aria-label="メニュー">
+					<svg
+						style="
+							width: 20px;
+							height: 20px;
+							fill: none;
+							stroke: currentColor;
+							stroke-width: 2;
+							stroke-linecap: round;
+							stroke-linejoin: round;
+						"
+						viewBox="0 0 24 24"
+					>
+						<g class="icon-menu">
+							<path d="M3 12h18M3 6h18M3 18h18" />
+						</g>
+						<g class="icon-close">
+							<path d="M18 6L6 18M6 6l12 12" />
+						</g>
+					</svg>
+				</button>
+
+				<div id="emptyState">
+					<div id="emptyStateNotice">
+						問題が発生したためオフラインモードで起動しています。<br />
+						メッセージの送信やスペースの作成はオフラインモードでは行えません。
+					</div>
+					<a id="emptyStateRetry" class="retryBtn" href="./"
+						>再試行</a
+					>
+				</div>
+
+				<div id="roomView">
+					<div id="header">
+						<div>
+							<span id="headerName"></span>
+							<span id="headerTag"></span>
+						</div>
+						<div id="headerNote">オフラインモード</div>
+					</div>
+					<div id="log"></div>
+					<div class="loadNote">
+						オフラインモード中はメッセージの送信ができません。<a
+							href="./"
+							>再試行</a
+						>
+					</div>
+				</div>
+			</div>
+
+			<!-- ファイルプレビュー -->
+			<div class="overlay" id="ovFilePreview">
+				<div class="modal">
+					<button
+						class="closeBtn"
+						id="filePreviewClose"
+						aria-label="閉じる"
+					>
+						×
+					</button>
+					<h2 id="filePreviewTitle">ファイル</h2>
+					<div id="filePreviewStage"></div>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			(function () {
+				'use strict';
+
+				/* ===================== utilities ===================== */
+				function fmtTime(ts) {
+					return new Date(ts).toLocaleString('ja-JP', {
+						month: '2-digit',
+						day: '2-digit',
+						hour: '2-digit',
+						minute: '2-digit',
+					});
+				}
+				function dayKey(ts) {
+					return new Date(ts).toDateString();
+				}
+				function hashColorFromUid(uid) {
+					let h = 0;
+					const s = uid || '?';
+					for (let i = 0; i < s.length; i++)
+						h = s.charCodeAt(i) + ((h << 5) - h);
+					const hue = Math.abs(h) % 360;
+					return `hsl(${hue} 48% 38%)`;
+				}
+				function initialsFromName(name) {
+					const s = (name || '').trim();
+					if (!s) return '?';
+					return Array.from(s).slice(0, 2).join('').toUpperCase();
+				}
+				function safeImageSrc(val) {
+					if (!val || typeof val !== 'string') return null;
+					if (
+						/^data:image\/(jpeg|png|gif|webp);base64,[A-Za-z0-9+/]+=*$/.test(
+							val,
+						)
+					)
+						return val;
+					return null;
+				}
+				const ALLOWED_MIME_MAP = {
+					'image/jpeg': true,
+					'image/png': true,
+					'image/gif': true,
+					'image/webp': true,
+					'image/bmp': true,
+					'image/tiff': true,
+					'video/mp4': true,
+					'video/webm': true,
+					'video/ogg': true,
+					'video/quicktime': true,
+					'video/x-matroska': true,
+					'audio/mpeg': true,
+					'audio/ogg': true,
+					'audio/wav': true,
+					'audio/webm': true,
+					'audio/aac': true,
+					'audio/flac': true,
+					'audio/x-m4a': true,
+					'audio/mp4': true,
+					'application/pdf': true,
+					'application/zip': true,
+					'application/x-zip-compressed': true,
+					'text/plain': true,
+					'text/csv': true,
+				};
+				function safeMimeType(mime) {
+					if (!mime || typeof mime !== 'string')
+						return 'application/octet-stream';
+					const lower = mime.toLowerCase().trim();
+					if (ALLOWED_MIME_MAP[lower]) return lower;
+					return 'application/octet-stream';
+				}
+				function isSafeMimePreviewable(mime) {
+					if (!mime) return false;
+					return /^(image\/(jpeg|png|gif|webp|bmp|tiff)|video\/(mp4|webm|ogg|quicktime|x-matroska)|audio\/(mpeg|ogg|wav|webm|aac|flac|x-m4a|mp4))$/.test(
+						mime.toLowerCase(),
+					);
+				}
+				function canPreviewFile(file) {
+					if (!file || !file.mime) return false;
+					return isSafeMimePreviewable(safeMimeType(file.mime));
+				}
+				function fmtBytes(n) {
+					if (!n && n !== 0) return '';
+					const units = ['B', 'KB', 'MB', 'GB'];
+					let i = 0,
+						v = n;
+					while (v >= 1024 && i < units.length - 1) {
+						v /= 1024;
+						i++;
+					}
+					return (i === 0 ? v : v.toFixed(1)) + ' ' + units[i];
+				}
+				function applyAvatarEl(el, p) {
+					el.innerHTML = '';
+					el.style.background = '';
+					const safeSrc = p && p.image ? safeImageSrc(p.image) : null;
+					if (safeSrc) {
+						const img = document.createElement('img');
+						img.src = safeSrc;
+						img.alt = '';
+						el.appendChild(img);
+					} else {
+						const displayName = p ? p.name : '?';
+						const colorKey = p && p.uid ? p.uid : displayName;
+						el.textContent = initialsFromName(displayName);
+						el.style.background = hashColorFromUid(colorKey);
+					}
+				}
+
+				/* ===================== storage readers (read-only) ===================== */
+				const RoomStore = {
+					listKey: 'nekochat_rooms',
+					msgKey(roomId) {
+						return 'nekochat_msgs_' + roomId;
+					},
+					memberKey(roomId) {
+						return 'nekochat_members_' + roomId;
+					},
+					list() {
+						try {
+							return JSON.parse(
+								localStorage.getItem(this.listKey) || '[]',
+							);
+						} catch (e) {
+							return [];
+						}
+					},
+					loadMembers(roomId) {
+						try {
+							return JSON.parse(
+								localStorage.getItem(this.memberKey(roomId)) ||
+									'[]',
+							);
+						} catch (e) {
+							return [];
+						}
+					},
+					loadMessages(roomId) {
+						try {
+							return JSON.parse(
+								localStorage.getItem(this.msgKey(roomId)) ||
+									'[]',
+							);
+						} catch (e) {
+							return [];
+						}
+					},
+				};
+				const UserStore = {
+					key: 'nekochat_users',
+					data: new Map(),
+					load() {
+						try {
+							const raw = localStorage.getItem(this.key);
+							if (raw) {
+								const arr = JSON.parse(raw);
+								for (const u of arr) {
+									if (u && u.uid) {
+										this.data.set(u.uid, {
+											uid: u.uid,
+											name: u.name || '名前なし',
+											image: u.image || null,
+										});
+									}
+								}
+							}
+						} catch (e) {}
+					},
+					get(uid) {
+						return this.data.get(uid) || null;
+					},
+				};
+				function loadNicknames() {
+					const map = new Map();
+					try {
+						const raw = localStorage.getItem('nekochat_nicknames');
+						if (raw) {
+							const obj = JSON.parse(raw);
+							for (const k in obj) map.set(k, obj[k]);
+						}
+					} catch (e) {}
+					return map;
+				}
+				function loadProfile() {
+					try {
+						const raw = localStorage.getItem('nekochat_profile');
+						if (raw) return JSON.parse(raw);
+					} catch (e) {}
+					return null;
+				}
+				function loadIdentity() {
+					try {
+						const raw = localStorage.getItem('nekochat_identity');
+						if (raw) return JSON.parse(raw);
+					} catch (e) {}
+					return null;
+				}
+
+				/* ----- IndexedDB (file blobs), read-only ----- */
+				const FILE_DB_NAME = 'nekochat_files_db';
+				const FILE_DB_STORE = 'files';
+				function openFileDb() {
+					return new Promise((resolve, reject) => {
+						let req;
+						try {
+							req = indexedDB.open(FILE_DB_NAME);
+						} catch (e) {
+							reject(e);
+							return;
+						}
+						req.onsuccess = () => resolve(req.result);
+						req.onerror = () =>
+							reject(
+								req.error || new Error('IndexedDB open failed'),
+							);
+						req.onupgradeneeded = () => {
+							// オフライン版では作成しない。万一未作成環境ではここに来るが読むだけなので問題ない。
+						};
+					});
+				}
+				async function getFileRecord(fileId) {
+					if (!fileId) return null;
+					try {
+						const db = await openFileDb();
+						if (!db.objectStoreNames.contains(FILE_DB_STORE)) {
+							db.close();
+							return null;
+						}
+						try {
+							const tx = db.transaction(
+								FILE_DB_STORE,
+								'readonly',
+							);
+							const req = tx
+								.objectStore(FILE_DB_STORE)
+								.get(fileId);
+							const row = await new Promise((resolve, reject) => {
+								req.onsuccess = () => resolve(req.result);
+								req.onerror = () => reject(req.error);
+							});
+							return row || null;
+						} finally {
+							db.close();
+						}
+					} catch (e) {
+						return null;
+					}
+				}
+				const objectUrlCache = new Map(); // fileId -> objectUrl
+				async function resolveFileObjectUrl(fileId, fileInfo) {
+					if (!fileId) return null;
+					if (objectUrlCache.has(fileId))
+						return objectUrlCache.get(fileId);
+					const rec = await getFileRecord(fileId);
+					if (!rec || !rec.blob) return null;
+					const safeMime = safeMimeType(
+						(fileInfo && fileInfo.mime) || rec.mime,
+					);
+					const blob =
+						rec.blob instanceof Blob
+							? rec.blob
+							: new Blob([rec.blob], { type: safeMime });
+					const url = URL.createObjectURL(blob);
+					objectUrlCache.set(fileId, url);
+					return url;
+				}
+
+				/* ===================== state ===================== */
+				const App = {
+					roomId: null,
+					identity: loadIdentity(),
+					profile: loadProfile(),
+					nicknames: loadNicknames(),
+				};
+				UserStore.load();
+
+				function getDisplayName(u) {
+					if (!u) return '名前なし';
+					const nick = App.nicknames.get(u.uid);
+					if (nick) return nick;
+					return u.name || '名前なし';
+				}
+
+				/* ===================== sidebar ===================== */
+				function renderSidebarFooter() {
+					const av = document.getElementById('myAvatar');
+					const nm = document.getElementById('myName');
+					const id = App.identity || {};
+					const prof = App.profile || {};
+					const p = {
+						uid: id.id || '',
+						name: prof.name || '名前なし',
+						image: prof.image || null,
+					};
+					applyAvatarEl(av, p);
+					nm.textContent = p.name;
+				}
+
+				function renderRoomList() {
+					const box = document.getElementById('roomList');
+					box.innerHTML = '';
+					const items = RoomStore.list();
+					const emptyEl = document.getElementById('sidebarEmpty');
+					emptyEl.style.display =
+						items.length === 0 ? 'block' : 'none';
+					items.forEach((r) => {
+						const el = document.createElement('div');
+						el.className =
+							'roomItem' + (r.id === App.roomId ? ' active' : '');
+						const dot = document.createElement('span');
+						dot.className = 'ricon';
+						const nmEl = document.createElement('span');
+						nmEl.className = 'rname';
+						nmEl.textContent = r.name || '無題のスペース';
+						const tag = document.createElement('span');
+						tag.className = 'rtag';
+						tag.textContent = r.persist ? '' : '一時';
+						el.appendChild(dot);
+						el.appendChild(nmEl);
+						el.appendChild(tag);
+						el.onclick = () => {
+							openRoom(r.id, r.name, r.persist);
+							if (isMobileViewport()) setSidebarOpen(false);
+						};
+						box.appendChild(el);
+					});
+				}
+
+				/* ===================== room view ===================== */
+				let currentMembers = new Map(); // uid -> {uid,name,image}
+
+				function openRoom(roomId, name, persist) {
+					App.roomId = roomId;
+					document.getElementById('emptyState').style.display =
+						'none';
+					document.getElementById('roomView').style.display = 'flex';
+					document.getElementById('headerName').textContent =
+						name || '無題のスペース';
+					document.getElementById('headerTag').textContent = persist
+						? '永続'
+						: '一時';
+
+					currentMembers = new Map();
+					RoomStore.loadMembers(roomId).forEach((m) => {
+						if (m && m.uid) currentMembers.set(m.uid, m);
+					});
+
+					renderRoomList();
+					renderLog(roomId);
+				}
+
+				function resolveSender(uid, fallbackName) {
+					if (App.identity && uid === App.identity.id) {
+						const prof = App.profile || {};
+						return {
+							uid,
+							name: prof.name || '名前なし',
+							image: prof.image || null,
+						};
+					}
+					const deviceUser = UserStore.get(uid);
+					const memberUser = currentMembers.get(uid);
+					return (
+						deviceUser ||
+						memberUser || {
+							uid,
+							name: fallbackName || '名前なし',
+							image: null,
+						}
+					);
+				}
+
+				/* ----- text rendering (URL linkify only; no remote emoji fetch in offline mode) ----- */
+				function renderTextWithLinks(container, text) {
+					if (!text) {
+						container.textContent = '';
+						return;
+					}
+					const URL_RE =
+						/https?:\/\/[^\s<>"'`\u3000-\u303f\uff00-\uffef\u2019\u201d]+/g;
+					let lastIndex = 0;
+					let match;
+					URL_RE.lastIndex = 0;
+					while ((match = URL_RE.exec(text)) !== null) {
+						const before = text.slice(lastIndex, match.index);
+						if (before)
+							container.appendChild(
+								document.createTextNode(before),
+							);
+						let url = match[0].replace(
+							/[.,!?;:)\]}>「」。、！？：；'"`]+$/,
+							'',
+						);
+						try {
+							const parsed = new URL(url);
+							if (
+								parsed.protocol === 'https:' ||
+								parsed.protocol === 'http:'
+							) {
+								const a = document.createElement('a');
+								a.className = 'chatLink';
+								a.href = url;
+								a.target = '_blank';
+								a.rel = 'noopener noreferrer';
+								a.textContent = url;
+								container.appendChild(a);
+								const suffix = match[0].slice(url.length);
+								if (suffix)
+									container.appendChild(
+										document.createTextNode(suffix),
+									);
+							} else {
+								container.appendChild(
+									document.createTextNode(match[0]),
+								);
+							}
+						} catch (e) {
+							container.appendChild(
+								document.createTextNode(match[0]),
+							);
+						}
+						lastIndex = match.index + match[0].length;
+					}
+					if (lastIndex < text.length)
+						container.appendChild(
+							document.createTextNode(text.slice(lastIndex)),
+						);
+				}
+
+				let lastDayKey = null;
+				let lastRenderedMsgUid = null;
+				let lastRenderedMsgTs = 0;
+				const COMPACT_MSG_MAX_GAP_MS = 5 * 60 * 1000;
+
+				// テキスト本文が5行を超える場合に折りたたみ処理を適用する
+				// bodyがDOMに追加される前に呼ばれる場合（高さ測定不可）は改行数で判定し、
+				// DOMマウント後にResizeObserverで再確認して過剰な折りたたみを解除する。
+				function applyBodyCollapse(body) {
+					const LINE_HEIGHT_EM = 1.55;
+					const MAX_LINES = 5;
+
+					// 改行カウントによる事前判定（DOM追加前でも動作）
+					const text = body.textContent || '';
+					const newlineCount = (text.match(/\n/g) || []).length;
+					// 改行が4以下なら折りたたみ不要（5行以内確定）
+					if (newlineCount < MAX_LINES) return;
+
+					// 改行が多い場合は折りたたみを適用し、DOM挿入後に高さで再確認
+					body.classList.add('collapsed');
+
+					// DOM挿入後に実際の行数を測定して判定を補正する
+					// requestAnimationFrameでレイアウト確定後に実行
+					const fontSize = 13.5; // px (font-size: 13.5px)
+					requestAnimationFrame(() => {
+						const lineHeightPx =
+							parseFloat(getComputedStyle(body).lineHeight) ||
+							fontSize * LINE_HEIGHT_EM;
+						const maxHeightPx = lineHeightPx * MAX_LINES;
+						// scrollHeightが閾値以下なら折りたたみ不要として元に戻す
+						if (body.scrollHeight <= Math.ceil(maxHeightPx) + 1) {
+							body.classList.remove('collapsed');
+							const afterEl2 = body.nextElementSibling;
+							if (
+								afterEl2 &&
+								afterEl2.classList.contains('showMoreBtn')
+							)
+								afterEl2.remove();
+							return;
+						}
+						// 「続きを表示」ボタンがまだなければ挿入
+						const afterEl = body.nextElementSibling;
+						if (
+							!afterEl ||
+							!afterEl.classList.contains('showMoreBtn')
+						) {
+							insertShowMoreBtn(body);
+						}
+					});
+				}
+
+				function insertShowMoreBtn(body) {
+					const btn = document.createElement('button');
+					btn.className = 'showMoreBtn';
+					btn.textContent = '続きを表示';
+					btn.onclick = () => {
+						const collapsed = body.classList.toggle('collapsed');
+						btn.textContent = collapsed
+							? '続きを表示'
+							: '折りたたむ';
+					};
+					body.insertAdjacentElement('afterend', btn);
+				}
+
+				function maybeDaySeparator(ts, log) {
+					const dk = dayKey(ts);
+					if (dk !== lastDayKey) {
+						lastDayKey = dk;
+						const sep = document.createElement('div');
+						sep.className = 'daySep';
+						sep.textContent = new Date(ts).toLocaleDateString(
+							'ja-JP',
+							{
+								year: 'numeric',
+								month: 'long',
+								day: 'numeric',
+							},
+						);
+						log.appendChild(sep);
+					}
+				}
+
+				function renderFileBody(body, m) {
+					const f = m.file;
+					if (!f) {
+						body.textContent = 'ファイル';
+						return;
+					}
+					const previewable = canPreviewFile(f);
+					if (previewable && f.fileId) {
+						resolveFileObjectUrl(f.fileId, f)
+							.then((url) => {
+								if (!url) {
+									renderFileCard(body, f, false);
+									return;
+								}
+								const mime = safeMimeType(f.mime);
+								body.innerHTML = '';
+								if (mime.startsWith('image/')) {
+									const img = document.createElement('img');
+									img.className = 'preview';
+									img.src = url;
+									img.alt = f.name || '';
+									img.addEventListener('click', () =>
+										openFilePreview(f, url, mime),
+									);
+									body.appendChild(img);
+								} else if (mime.startsWith('video/')) {
+									const video =
+										document.createElement('video');
+									video.className = 'preview previewVideo';
+									video.src = url;
+									video.controls = true;
+									video.playsInline = true;
+									video.preload = 'metadata';
+									body.appendChild(video);
+								} else if (mime.startsWith('audio/')) {
+									const audio =
+										document.createElement('audio');
+									audio.className = 'previewAudio';
+									audio.src = url;
+									audio.controls = true;
+									body.appendChild(audio);
+								} else {
+									renderFileCard(body, f, true, url);
+								}
+							})
+							.catch(() => renderFileCard(body, f, false));
+						// 取得中は仮にカードを出しておく
+						renderFileCard(body, f, false);
+						return;
+					}
+					renderFileCard(body, f, false);
+				}
+
+				function renderFileCard(body, f, ready, url) {
+					body.innerHTML = '';
+					const wrap = document.createElement('div');
+					wrap.className = 'file' + (ready ? '' : ' missing');
+					const fname = document.createElement('span');
+					fname.className = 'fname';
+					fname.textContent = f.name || 'ファイル';
+					wrap.appendChild(fname);
+					if (f.size) {
+						const fsize = document.createElement('span');
+						fsize.className = 'fsize';
+						fsize.textContent = fmtBytes(f.size);
+						wrap.appendChild(fsize);
+					}
+					if (ready && url) {
+						const a = document.createElement('a');
+						a.className = 'dlBtn';
+						a.href = url;
+						a.download = f.name || 'download.bin';
+						a.textContent = 'ダウンロード';
+						wrap.appendChild(a);
+					} else {
+						const note = document.createElement('span');
+						note.className = 'fsize';
+						note.textContent =
+							'このブラウザに実体データがありません';
+						wrap.appendChild(note);
+					}
+					body.appendChild(wrap);
+				}
+
+				function openFilePreview(f, url, mime) {
+					const overlay = document.getElementById('ovFilePreview');
+					const title = document.getElementById('filePreviewTitle');
+					const stage = document.getElementById('filePreviewStage');
+					title.textContent = f.name || 'ファイル';
+					stage.innerHTML = '';
+					if (mime.startsWith('image/')) {
+						const img = document.createElement('img');
+						img.src = url;
+						stage.appendChild(img);
+					} else if (mime.startsWith('video/')) {
+						const video = document.createElement('video');
+						video.src = url;
+						video.controls = true;
+						stage.appendChild(video);
+					}
+					overlay.classList.add('open');
+				}
+				document.getElementById('filePreviewClose').onclick = () => {
+					document
+						.getElementById('ovFilePreview')
+						.classList.remove('open');
+				};
+				document
+					.getElementById('ovFilePreview')
+					.addEventListener('click', (e) => {
+						if (e.target.id === 'ovFilePreview')
+							e.currentTarget.classList.remove('open');
+					});
+
+				function appendMessageEl(m, log) {
+					maybeDaySeparator(m.ts, log);
+
+					if (m.k === 'system') {
+						const div = document.createElement('div');
+						div.className = 'msg system';
+						const body = document.createElement('div');
+						body.className = 'body';
+						body.textContent = m.text || '';
+						div.appendChild(body);
+						log.appendChild(div);
+						lastRenderedMsgUid = null;
+						return;
+					}
+
+					const isCompactMsg =
+						!m.deleted &&
+						!m.replyTo &&
+						m.uid &&
+						m.uid === lastRenderedMsgUid &&
+						m.ts - lastRenderedMsgTs < COMPACT_MSG_MAX_GAP_MS;
+					lastRenderedMsgUid = m.uid || null;
+					lastRenderedMsgTs = m.ts || 0;
+
+					const div = document.createElement('div');
+					div.className =
+						'msg' +
+						(m.deleted ? ' deleted' : '') +
+						(isCompactMsg ? ' compact' : '');
+
+					const av = document.createElement('div');
+					av.className = 'avatar msgAvatar';
+					const senderUser = resolveSender(m.uid, m.name);
+					applyAvatarEl(av, senderUser);
+					div.appendChild(av);
+
+					const content = document.createElement('div');
+					content.className = 'msgContent';
+
+					const meta = document.createElement('div');
+					meta.className = 'meta';
+					const nameSpan = document.createElement('span');
+					nameSpan.className = 'name';
+					nameSpan.textContent =
+						getDisplayName(senderUser) || '名前なし';
+					meta.appendChild(nameSpan);
+					meta.appendChild(
+						document.createTextNode('  ·  ' + fmtTime(m.ts)),
+					);
+					const idSpan = document.createElement('span');
+					idSpan.className = 'msgUid';
+					idSpan.textContent = '  ·  #' + (m.uid || '').slice(0, 10);
+					meta.appendChild(idSpan);
+					content.appendChild(meta);
+
+					if (m.replyTo && m.replyTo.id) {
+						const rq = document.createElement('div');
+						rq.className = 'replyQuote';
+						const rqName = document.createElement('span');
+						rqName.className = 'replyName';
+						rqName.textContent = m.replyTo.name || '名前なし';
+						const rqText = document.createElement('span');
+						rqText.className = 'replyText';
+						rqText.textContent = m.replyTo.text || '（メッセージ）';
+						rq.appendChild(rqName);
+						rq.appendChild(rqText);
+						content.appendChild(rq);
+					}
+
+					const body = document.createElement('div');
+					body.className = 'body';
+					if (m.deleted) {
+						body.textContent = 'メッセージは削除されました';
+						content.appendChild(body);
+					} else if (m.k === 'file') {
+						content.appendChild(body);
+						renderFileBody(body, m);
+					} else {
+						renderTextWithLinks(body, m.text);
+						content.appendChild(body);
+						// 5行超えの場合は折りたたむ
+						applyBodyCollapse(body);
+					}
+
+					div.appendChild(content);
+					log.appendChild(div);
+				}
+
+				function renderLog(roomId) {
+					lastDayKey = null;
+					lastRenderedMsgUid = null;
+					lastRenderedMsgTs = 0;
+					const log = document.getElementById('log');
+					log.innerHTML = '';
+					const msgs = RoomStore.loadMessages(roomId)
+						.filter(
+							(m) =>
+								m.k === 'chat' ||
+								m.k === 'file' ||
+								m.k === 'system',
+						)
+						.sort((a, b) => a.ts - b.ts);
+					if (msgs.length === 0) {
+						const empty = document.createElement('div');
+						empty.id = 'logEmpty';
+						empty.textContent =
+							'保存されたメッセージがありません。';
+						log.appendChild(empty);
+						return;
+					}
+					for (const m of msgs) appendMessageEl(m, log);
+					log.scrollTop = log.scrollHeight;
+				}
+
+				/* ===================== sidebar open/close ===================== */
+				function isMobileViewport() {
+					return window.innerWidth <= 768;
+				}
+				function setSidebarOpen(open) {
+					document.body.dataset.sidebar = open ? 'open' : 'closed';
+				}
+				function toggleSidebar() {
+					setSidebarOpen(document.body.dataset.sidebar !== 'open');
+				}
+				document.getElementById('sidebarToggleBtn').onclick =
+					toggleSidebar;
+				document.getElementById('sidebarCloseBtn').onclick = () =>
+					setSidebarOpen(false);
+				// PCでは常時表示、モバイルでは初期非表示
+				setSidebarOpen(!isMobileViewport());
+				window.addEventListener('resize', () => {
+					setSidebarOpen(!isMobileViewport());
+				});
+
+				/* ===================== init ===================== */
+				renderSidebarFooter();
+				renderRoomList();
+			})();
+		</script>
+	</body>
+</html>

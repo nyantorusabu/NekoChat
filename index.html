@@ -4,6 +4,9 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="./favicon.svg" />
+		<link rel="manifest" href="./manifest.webmanifest" />
+		<meta name="theme-color" content="#fafaf8" />
 		<link rel="stylesheet" href="./style.css" />
 		<title>NekoChat</title>
 	</head>
@@ -685,5 +688,24 @@
 
 		<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 		<script src="./main.js"></script>
+		<script>
+			// Service Worker登録: オフライン時にoffline.htmlを表示できるようにし、
+			// PWAとしてインストール可能にする
+			if ('serviceWorker' in navigator) {
+				window.addEventListener('load', () => {
+					navigator.serviceWorker
+						.register('./sw.js')
+						.then((reg) => {
+							// オンライン中は定期的に最新版の確認を行い、
+							// 新しいキャッシュへ自動更新する
+							reg.update();
+							window.addEventListener('online', () => reg.update());
+						})
+						.catch((err) => {
+							console.warn('Service Worker registration failed:', err);
+						});
+				});
+			}
+		</script>
 	</body>
 </html>

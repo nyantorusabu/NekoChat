@@ -4898,10 +4898,39 @@ window.addEventListener('DOMContentLoaded', () => {
 	// renderVoiceScreen から参照するため tick 単位で管理
 	let _captionDotPhase = 0;
 
+	// 字幕テキスト（タイピングドット込み）を組み立てる。
+	// renderVoiceScreen と _captionDotTick の両方から呼ばれる共通ロジック。
+	function buildCaptionText(realUid) {
+		const cap = App.captions.get(realUid);
+		if (cap) {
+			const isStale = (Date.now() - cap.ts) > APP_CAPTION_TTL_MS;
+			const isTyping = App._captionTyping.has(realUid) && !isStale;
+			return {
+				text: cap.text + (isTyping ? captionDotStr() : ''),
+				stale: isStale,
+			};
+		}
+		const isTyping = App._captionTyping.has(realUid);
+		return {
+			text: isTyping
+				? '発言を待っています' + captionDotStr()
+				: '発言を待っています...',
+			stale: false,
+		};
+	}
+
 	function _captionDotTick() {
 		if (!App.captionsOn || !App.localStream) return;
 		_captionDotPhase = (_captionDotPhase + 1) % 3;
-		renderVoiceScreen();
+		// 画面共有中の video 要素ごと再構築する renderVoiceScreen() は重く、
+		// 共有画面視聴側でちらつきの原因になるため、ここでは既存の
+		// .pCaption 要素のテキストだけをピンポイントで差分更新する。
+		document.querySelectorAll('.pCaption[data-caption-uid]').forEach((el) => {
+			const realUid = el.dataset.captionUid;
+			const { text, stale } = buildCaptionText(realUid);
+			el.textContent = text;
+			el.style.opacity = stale ? '0.4' : '';
+		});
 	}
 
 	function startCaptionDotTimer() {
@@ -5372,9 +5401,16 @@ window.addEventListener('DOMContentLoaded', () => {
 					// ブラウザ側のエンコーダは自動的に新しい解像度へ追従するが、
 					// 自分のプレビュー表示（アスペクト比に依存するUI要素）を
 					// 最新の状態に合わせて再描画する。
+					// なお onresize は輻輳制御等によるエンコーダの自動解像度調整でも
+					// 短時間に連発することがあるため、重い renderVoiceScreen() の
+					// 呼び出し過多でちらつかないようデバウンスする。
+					let _screenResizeTimer = null;
 					vTrack.onresize = () => {
 						if (!App.screenOn) return;
-						renderVoiceScreen();
+						clearTimeout(_screenResizeTimer);
+						_screenResizeTimer = setTimeout(() => {
+							if (App.screenOn) renderVoiceScreen();
+						}, 400);
 					};
 				}
 				renderVoiceToolbar();
@@ -6063,23 +6099,14 @@ window.addEventListener('DOMContentLoaded', () => {
 			row.appendChild(volumeWrap);
 
 			if (!isScreen && App.captionsOn) {
-				const cap = App.captions.get(realUid);
 				const capEl = document.createElement('div');
 				capEl.className = 'pCaption';
-				// B5 fix: TTL を過ぎた古い字幕は薄く表示してゾンビ字幕を防ぐ
-				if (cap) {
-					const isStale = (Date.now() - cap.ts) > APP_CAPTION_TTL_MS;
-					const isTyping = App._captionTyping.has(realUid) && !isStale;
-					// 入力中なら字幕末尾にタイピングドットを付ける
-					capEl.textContent = cap.text + (isTyping ? captionDotStr() : '');
-					if (isStale) capEl.style.opacity = '0.4';
-				} else {
-					const isTyping = App._captionTyping.has(realUid);
-					// 待機中で入力中なら「発言を待っています」の末尾ドットをアニメーション化
-					capEl.textContent = isTyping
-						? '発言を待っています' + captionDotStr()
-						: '発言を待っています...';
-				}
+				// タイピングドットのtickだけで毎回 video 要素ごと再構築されるのを防ぐため、
+				// 該当uidを識別子として付与し、_captionDotTick からは軽量な差分更新のみ行う
+				capEl.dataset.captionUid = realUid;
+				const { text, stale } = buildCaptionText(realUid);
+				capEl.textContent = text;
+				if (stale) capEl.style.opacity = '0.4';
 				row.appendChild(capEl);
 			}
 			list.appendChild(row);
