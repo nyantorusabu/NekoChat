@@ -724,6 +724,7 @@ hr.sep {
 		border-color 0.12s;
 	color: #ddd;
 	flex-shrink: 0;
+	position: relative;
 }
 .vcIconBtn svg {
 	width: 18px;
@@ -1732,8 +1733,17 @@ body[data-media-fullscreen='open'] {
 		flex-wrap: nowrap;
 		-webkit-overflow-scrolling: touch;
 		scrollbar-width: none;
+		/* ボタン下に表示するツールチップ分の余白を確保 */
+		padding-bottom: 32px;
 	}
 	#voiceToolbar::-webkit-scrollbar {
 		display: none;
+	}
+	/* モバイルではoverflow-x:autoの都合でoverflow-y:hiddenとなり、
+	   ボタン上方向(bottom基準)のツールチップが親要素にクリップされ
+	   裏側に隠れてしまうため、ボタン下方向に表示先を切り替える */
+	.vcIconBtn::after {
+		bottom: auto;
+		top: 48px;
 	}
 }

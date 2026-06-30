@@ -899,6 +899,42 @@ window.addEventListener('DOMContentLoaded', () => {
 			new URLSearchParams(location.hash.replace(/^#/, '')).has('voice')
 		);
 	}
+	// simple/voiceは値を持たないフラグパラメータとして扱う。
+	// URLSearchParamsのset(key, '')は必ず "key=" という空の=付き文字列になってしまうため、
+	// "&voice=" のような不格好な表記を避けるべく手組みでクエリ文字列を生成する。
+	// roomId未指定時は r パラメータを含めない（ルーム未参加時のURL用）。
+	function buildModeSearch(roomId) {
+		const parts = [];
+		if (roomId) parts.push('r=' + encodeURIComponent(roomId));
+		if (isSimpleMode()) parts.push('simple');
+		if (isVoiceMode()) parts.push('voice');
+		return parts.length ? '?' + parts.join('&') : '';
+	}
+	// voiceパラメータでボイスチャットモーダルを開いた後、URLから自動削除する
+	// （再読み込みやルーム再入で勝手にモーダルが再オープンしないようにするため）
+	// buildModeSearchと同じくフラグ形式（=なし）で再構成し、空の "simple=" 等が
+	// 紛れ込まないようにする。
+	function clearVoiceModeParam() {
+		if (!isVoiceMode()) return;
+		const roomId = new URLSearchParams(location.search).get('r');
+		const newSearch = (() => {
+			const parts = [];
+			if (roomId) parts.push('r=' + encodeURIComponent(roomId));
+			if (isSimpleMode()) parts.push('simple');
+			return parts.length ? '?' + parts.join('&') : '';
+		})();
+		const hp = new URLSearchParams(location.hash.replace(/^#/, ''));
+		hp.delete('voice');
+		const hStr = hp.toString();
+		const newHash = hStr ? '#' + hStr : '';
+		if (location.search !== newSearch || location.hash !== newHash) {
+			history.replaceState(
+				history.state,
+				'',
+				location.pathname + newSearch + newHash,
+			);
+		}
+	}
 
 	function applySimpleMode() {
 		const sidebar = document.getElementById('sidebar');
@@ -2685,6 +2721,7 @@ window.addEventListener('DOMContentLoaded', () => {
 							rejoinVoiceAfterReconnect();
 						} else if (isVoiceMode() && !App.localStream) {
 							openVoiceJoinModal();
+							clearVoiceModeParam();
 						}
 					});
 
@@ -2807,6 +2844,7 @@ window.addEventListener('DOMContentLoaded', () => {
 								rejoinVoiceAfterReconnect();
 							} else if (isVoiceMode() && !App.localStream) {
 								openVoiceJoinModal();
+								clearVoiceModeParam();
 							}
 						});
 
@@ -2915,6 +2953,7 @@ window.addEventListener('DOMContentLoaded', () => {
 							rejoinVoiceAfterReconnect();
 						} else if (isVoiceMode() && !App.localStream) {
 							openVoiceJoinModal();
+							clearVoiceModeParam();
 						}
 					});
 					// DataChannel レベルのエラーはホスト不在の確証にならない。
@@ -5329,6 +5368,14 @@ window.addEventListener('DOMContentLoaded', () => {
 					vTrack.onended = () => {
 						if (App.screenOn) toggleScreenShare();
 					};
+					// 共有中にウィンドウのリサイズ等でキャプチャ解像度が変化した際、
+					// ブラウザ側のエンコーダは自動的に新しい解像度へ追従するが、
+					// 自分のプレビュー表示（アスペクト比に依存するUI要素）を
+					// 最新の状態に合わせて再描画する。
+					vTrack.onresize = () => {
+						if (!App.screenOn) return;
+						renderVoiceScreen();
+					};
 				}
 				renderVoiceToolbar();
 				renderVoiceScreen();
@@ -7127,11 +7174,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		renderVoiceScreen();
 
 		// popstateによる再入を防ぐためreplaceStateでクエリパラメータを更新する
-		const _qp = new URLSearchParams();
-		_qp.set('r', roomId);
-		if (isSimpleMode()) _qp.set('simple', '');
-		if (isVoiceMode()) _qp.set('voice', '');
-		const _newSearch = '?' + _qp.toString();
+		const _newSearch = buildModeSearch(roomId);
 		if (location.search !== _newSearch) {
 			history.replaceState(history.state, '', _newSearch);
 		}
@@ -7194,10 +7237,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		App.reconnecting = false;
 		App.ephemeral = null;
 		App.roomMembers = new Set();
-		const _lqp = new URLSearchParams();
-		if (isSimpleMode()) _lqp.set('simple', '');
-		if (isVoiceMode()) _lqp.set('voice', '');
-		const _lSearch = _lqp.toString() ? '?' + _lqp.toString() : '';
+		const _lSearch = buildModeSearch(null);
 		if (location.search !== _lSearch) {
 			history.replaceState(null, '', location.pathname + _lSearch);
 		}
@@ -7286,18 +7326,17 @@ window.addEventListener('DOMContentLoaded', () => {
 		document.getElementById('rsName').value = App.roomOption.name || '';
 		document.getElementById('rsPersist').checked = !App.roomOption.persist;
 
-		const _rqp = new URLSearchParams();
-		_rqp.set('r', App.roomId);
+		const _rParts = ['r=' + encodeURIComponent(App.roomId)];
 		// 一時チャット、または現在のクエリにsimpleが指定されている場合は simple を付与
 		if (!App.roomOption.persist || isSimpleMode()) {
-			_rqp.set('simple', '');
+			_rParts.push('simple');
 		}
 		// ボイスチャット接続中は voice を付与
 		if (App.localStream) {
-			_rqp.set('voice', '');
+			_rParts.push('voice');
 		}
 		const link =
-			location.origin + location.pathname + '?' + _rqp.toString();
+			location.origin + location.pathname + '?' + _rParts.join('&');
 		document.getElementById('rsLink').value = link;
 		openOverlay('ovRoomSettings');
 	}
