@@ -2424,7 +2424,9 @@ window.addEventListener('DOMContentLoaded', () => {
 	/* ===================== app state ===================== */
 
 	const HEARTBEAT_MS = 4000,
-		HEARTBEAT_TIMEOUT_MS = 15000;
+		HEARTBEAT_TIMEOUT_MS = 15000,
+		BACKGROUND_HEARTBEAT_MS = 15000,
+		BACKGROUND_HEARTBEAT_TIMEOUT_MS = 60000;
 
 	const App = {
 		roomId: null,
@@ -2441,6 +2443,8 @@ window.addEventListener('DOMContentLoaded', () => {
 		messages: new Map(),
 		connected: false,
 		reconnecting: false,
+		isHidden: document.visibilityState === 'hidden',
+		backgroundPeers: new Map(),
 		heartbeatTimer: null,
 		hostTimeoutTimer: null,
 		clientTimers: new Map(),
@@ -2587,6 +2591,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		App.peer = null;
 		App.hostConn = null;
 		App.conns = new Map();
+		App.backgroundPeers = new Map();
 		App.connected = false;
 		App.reconnecting = false;
 		App.isHost = false;
@@ -2603,6 +2608,61 @@ window.addEventListener('DOMContentLoaded', () => {
 		const el = document.getElementById('connStatus');
 		el.textContent = label;
 		el.className = ok ? 'ok' : 'bad';
+	}
+
+	function shouldRelaxBackground(uid = null) {
+		if (uid && App.backgroundPeers.has(uid)) {
+			return !!App.backgroundPeers.get(uid)?.hidden;
+		}
+		return App.isHidden;
+	}
+
+	function getHeartbeatIntervalMs(uid = null) {
+		return shouldRelaxBackground(uid)
+			? BACKGROUND_HEARTBEAT_MS
+			: HEARTBEAT_MS;
+	}
+
+	function getHeartbeatTimeoutMs(uid = null) {
+		return shouldRelaxBackground(uid)
+			? BACKGROUND_HEARTBEAT_TIMEOUT_MS
+			: HEARTBEAT_TIMEOUT_MS;
+	}
+
+	async function announceBackgroundState() {
+		if (!App.roomId || !App.connected) return;
+		const payload = {
+			k: 'background-policy',
+			roomId: App.roomId,
+			uid: Identity.id,
+			ts: Date.now(),
+			hidden: App.isHidden,
+			policy: {
+				heartbeatMs: getHeartbeatIntervalMs(),
+				timeoutMs: getHeartbeatTimeoutMs(),
+				suppressAutoVoice: true,
+				suppressReconnect: true,
+			},
+		};
+		const sig = await signPayload(payload);
+		const msg = {
+			t: 'sys',
+			sub: 'background-policy',
+			payload: {
+				uid: Identity.id,
+				hidden: App.isHidden,
+				policy: payload.policy,
+				ts: payload.ts,
+				sig,
+				pub: Identity.pubJwk,
+				peerId: App.peer ? App.peer.id : null,
+			},
+		};
+		if (App.isHost) {
+			broadcast(msg);
+		} else if (App.hostConn && App.hostConn.open) {
+			App.hostConn.send(msg);
+		}
 	}
 
 	function connectFlow() {
@@ -2717,9 +2777,9 @@ window.addEventListener('DOMContentLoaded', () => {
 							App._prevReconnecting = false;
 							toast('再接続しました');
 						}
-						if (App._wasInVoice && !App.localStream) {
+						if (App._wasInVoice && !App.localStream && !App.isHidden) {
 							rejoinVoiceAfterReconnect();
-						} else if (isVoiceMode() && !App.localStream) {
+						} else if (isVoiceMode() && !App.localStream && !App.isHidden) {
 							openVoiceJoinModal();
 							clearVoiceModeParam();
 						}
@@ -2874,7 +2934,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			peer.on('disconnected', () => {
 				// ルームが切り替わっていたら再接続しない
 				if (!isActive()) return;
-				if (!peer.destroyed) {
+				if (!peer.destroyed && !shouldRelaxBackground()) {
 					try {
 						peer.reconnect();
 					} catch (e) {}
@@ -2949,9 +3009,9 @@ window.addEventListener('DOMContentLoaded', () => {
 							toast('再接続しました');
 						}
 						// 再接続前にボイスチャット参加中だった場合は自動復帰
-						if (App._wasInVoice && !App.localStream) {
+						if (App._wasInVoice && !App.localStream && !App.isHidden) {
 							rejoinVoiceAfterReconnect();
-						} else if (isVoiceMode() && !App.localStream) {
+						} else if (isVoiceMode() && !App.localStream && !App.isHidden) {
 							openVoiceJoinModal();
 							clearVoiceModeParam();
 						}
@@ -3009,6 +3069,12 @@ window.addEventListener('DOMContentLoaded', () => {
 	}
 
 	function reconnectAfterLoss() {
+		if (App.isHidden) {
+			App.reconnecting = false;
+			App._reconnectAttempt = 0;
+			setStatus(false, '接続中...');
+			return;
+		}
 		if (App.reconnecting) return;
 		App._reconnectAttempt = (App._reconnectAttempt || 0) + 1;
 		const attempt = App._reconnectAttempt;
@@ -3169,7 +3235,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			renderHeader();
 			renderUserPopover();
 			renderVoiceScreen();
-			if (App.localStream && !!meta.inVoice) {
+			if (App.localStream && !App.isHidden && !!meta.inVoice) {
 				callUser(meta.uid);
 				if (App.screenOn) callScreenUser(meta.uid);
 			}
@@ -3211,13 +3277,19 @@ window.addEventListener('DOMContentLoaded', () => {
 	function resetClientHeartbeatTimer(peerId) {
 		if (App.clientTimers.has(peerId))
 			clearTimeout(App.clientTimers.get(peerId));
+		const conn = App.conns.get(peerId);
+		const uid = conn?.metadata?.uid || null;
 		App.clientTimers.set(
 			peerId,
 			setTimeout(() => {
-				const conn = App.conns.get(peerId);
-				if (conn && conn.metadata)
-					handleClientDisconnect(peerId, conn.metadata.uid);
-			}, HEARTBEAT_TIMEOUT_MS),
+				const currentConn = App.conns.get(peerId);
+				if (!currentConn || !currentConn.metadata) return;
+				if (shouldRelaxBackground(uid)) {
+					resetClientHeartbeatTimer(peerId);
+					return;
+				}
+				handleClientDisconnect(peerId, currentConn.metadata.uid);
+			}, getHeartbeatTimeoutMs(uid)),
 		);
 	}
 	function broadcast(msg, excludePeerIds) {
@@ -3242,13 +3314,20 @@ window.addEventListener('DOMContentLoaded', () => {
 		resetHostTimeout();
 		App.heartbeatTimer = setInterval(() => {
 			if (conn.open) conn.send({ t: 'sys', sub: 'heartbeat' });
-		}, HEARTBEAT_MS);
+		}, getHeartbeatIntervalMs());
+	}
+	function getReconnectGracePeriodMs() {
+		return App.isHidden ? 60000 : HEARTBEAT_TIMEOUT_MS;
 	}
 	function resetHostTimeout() {
 		clearTimeout(App.hostTimeoutTimer);
 		App.hostTimeoutTimer = setTimeout(() => {
+			if (App.isHidden) {
+				resetHostTimeout();
+				return;
+			}
 			if (!App.reconnecting) reconnectAfterLoss();
-		}, HEARTBEAT_TIMEOUT_MS);
+		}, getReconnectGracePeriodMs());
 	}
 
 	/* ---- shared incoming handler ---- */
@@ -3310,7 +3389,7 @@ window.addEventListener('DOMContentLoaded', () => {
 					renderVoiceScreen();
 					// 既にボイスチャットに参加済みの場合、
 					// syncで受け取った既存参加者へストリームを送る
-					if (App.localStream) {
+					if (App.localStream && !App.isHidden) {
 						(data.payload.users || []).forEach((u) => {
 							if (u.uid !== Identity.id && u.inVoice) {
 								callUser(u.uid);
@@ -3352,7 +3431,7 @@ window.addEventListener('DOMContentLoaded', () => {
 						renderUserPopover();
 						renderVoiceScreen();
 						renderLog();
-						if (App.localStream && ju.uid !== Identity.id) {
+						if (App.localStream && !App.isHidden && ju.uid !== Identity.id) {
 							callUser(ju.uid);
 							if (App.screenOn) callScreenUser(ju.uid);
 						}
@@ -3391,6 +3470,7 @@ window.addEventListener('DOMContentLoaded', () => {
 					// 自分がボイスチャット中なら接続を開始する（後参加者との接続漏れ防止）
 					if (
 						App.localStream &&
+						!App.isHidden &&
 						uu.uid !== Identity.id &&
 						uu.inVoice &&
 						!App.voiceConns.has(uu.uid)
@@ -3408,6 +3488,30 @@ window.addEventListener('DOMContentLoaded', () => {
 					renderVoiceScreen();
 					stopVoiceWith(data.payload.uid);
 					stopScreenWith(data.payload.uid);
+					break;
+				}
+				case 'background-policy': {
+					const bp = data.payload || {};
+					if (!bp || !bp.uid || !bp.pub || !bp.sig || typeof bp.ts !== 'number') break;
+					const ok = await verifyPayload(
+						{
+							k: 'background-policy',
+							roomId: App.roomId,
+							uid: bp.uid,
+							ts: bp.ts,
+							hidden: !!bp.hidden,
+							policy: bp.policy || {},
+						},
+						bp.sig,
+						bp.pub,
+						bp.uid,
+					);
+					if (!ok) break;
+					App.backgroundPeers.set(bp.uid, {
+						hidden: !!bp.hidden,
+						policy: bp.policy || {},
+						updatedAt: Date.now(),
+					});
 					break;
 				}
 				case 'heartbeat':
@@ -3902,6 +4006,21 @@ window.addEventListener('DOMContentLoaded', () => {
 			persistIfNeeded();
 			appendMessageEl(payload);
 			scrollLogToBottom();
+			if (document.visibilityState === 'hidden' && payload.k === 'chat' && payload.uid !== Identity.id) {
+				// Android などのホスト実装側で後から通知を拡張できるように、
+				// NCWeb 本体は通常のメッセージ受信処理のままにしておく。
+				try {
+					window.dispatchEvent(new CustomEvent('ncweb:message-received', {
+						detail: {
+							uid: payload.uid,
+							name: payload.name || 'User',
+							text: payload.text || '',
+							roomId: App.roomId,
+							roomName: App.roomOption && App.roomOption.name ? App.roomOption.name : (App.roomId || ''),
+						},
+					}));
+				} catch (e) {}
+			}
 
 			if (
 				payload.k === 'file' &&
@@ -4218,6 +4337,34 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (!text) return;
 		appendSystemEl({ text });
 		scrollLogToBottom();
+	}
+
+	function handleReplyFromNotification(replyText, sender, room) {
+		const trimmed = String(replyText || '').trim();
+		if (!trimmed) return;
+		const targetRoom = room || App.roomId;
+		if (!targetRoom) return;
+		const roomName = App.roomOption && App.roomOption.name ? App.roomOption.name : targetRoom;
+		if (App.roomId && App.roomId !== targetRoom) {
+			openRoom(targetRoom, roomName, true, false);
+		}
+		sendAppMessage({
+			k: 'chat',
+			id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+			uid: Identity.id,
+			roomId: targetRoom,
+			text: trimmed,
+			ts: Date.now(),
+			replyTo: sender ? { id: `reply-${sender}`, uid: sender, name: sender, text: trimmed } : null,
+		});
+	}
+
+	function dispatchNotificationReply(replyText, sender, room) {
+		try {
+			window.dispatchEvent(new CustomEvent('ncweb:notification-reply', {
+				detail: { replyText, sender, room },
+			}));
+		} catch (e) {}
 	}
 
 	/* ===================== voice chat ===================== */
@@ -5076,8 +5223,22 @@ window.addEventListener('DOMContentLoaded', () => {
 		}
 	}
 	document.addEventListener('visibilitychange', async () => {
-		if (document.visibilityState === 'visible' && App.localStream) {
-			await requestWakeLock();
+		App.isHidden = document.visibilityState === 'hidden';
+		if (App.connected) {
+			try {
+				await announceBackgroundState();
+			} catch (e) {
+				console.warn('background-policy announce failed:', e);
+			}
+		}
+		if (document.visibilityState === 'visible') {
+			if (App.connected) {
+				resetHostTimeout();
+				App.clientTimers.forEach((_, peerId) => resetClientHeartbeatTimer(peerId));
+			}
+			if (App.localStream) {
+				await requestWakeLock();
+			}
 		}
 	});
 	async function toggleMute() {
