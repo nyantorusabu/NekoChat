@@ -1389,11 +1389,25 @@ body[data-sidebar='open'] .icon-close {
 		transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.pRow.speaking,
-.thumbTile.speaking,
-#featuredVideo.speaking {
+.pRow.speaking {
 	box-shadow: inset 0 0 0 2px #4caf50;
 	border-color: #4caf50;
+}
+/* thumbTile / featuredVideo は内部に video 要素があり、そのまま
+   box-shadow: inset を付けると video の下に隠れて見えなくなるため、
+   video より手前に重なる疑似要素で発言インジケーターを描画する */
+.thumbTile.speaking,
+#featuredVideo.speaking {
+	border-color: #4caf50;
+}
+.thumbTile.speaking::after,
+#featuredVideo.speaking::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	box-shadow: inset 0 0 0 2px #4caf50;
+	pointer-events: none;
+	z-index: 5;
 }
 .pVolume {
 	display: flex;

@@ -1268,7 +1268,12 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (
 			!canDownload ||
 			state?.status === 'missing' ||
-			state?.status === 'requesting'
+			state?.status === 'requesting' ||
+			// 拒否（ダウンロード中断）や一時停止のあと、続きを受け取る
+			// 手段がなくなってしまうのを防ぐため、これらの状態でも
+			// 「転送をリクエスト」を表示する
+			state?.status === 'rejected' ||
+			state?.status === 'paused'
 		) {
 			const reqBtn = document.createElement('button');
 			reqBtn.textContent = '転送をリクエスト';
@@ -1378,12 +1383,16 @@ window.addEventListener('DOMContentLoaded', () => {
 		renderLog();
 		if (state.currentSenderUid) {
 			const ts = Date.now();
+			// targetUidは送信中断メッセージの宛先（=送信元）のUID。
+			// これがnullのままだと handleFileControl 側の
+			// `payload.targetUid === Identity.id` 判定に一致せず、
+			// 送信元が中断を認識できないまま送信を続けてしまう。
 			const signable = {
 				k: 'file-control',
 				action: 'reject',
 				fileId,
 				roomId: App.roomId,
-				targetUid: null,
+				targetUid: state.currentSenderUid,
 				recipientUid: Identity.id,
 				preferredUid: null,
 				acceptedAt: null,
@@ -1397,7 +1406,7 @@ window.addEventListener('DOMContentLoaded', () => {
 					action: 'reject',
 					fileId,
 					roomId: App.roomId,
-					targetUid: null,
+					targetUid: state.currentSenderUid,
 					recipientUid: Identity.id,
 					preferredUid: null,
 					acceptedAt: null,
@@ -1764,7 +1773,20 @@ window.addEventListener('DOMContentLoaded', () => {
 			msg.file.totalBytes = state.totalBytes;
 		}
 		if (!updateFileMessageEl(payload.fileId)) renderLog();
-		if (payload.total != null && state.chunks.size >= payload.total) {
+		// 中断→再開を挟むと state.chunks に欠番が残ったまま size だけが
+		// total 以上になるケースがある（別の相手からの再送で一部seqが
+		// 重複し、実際には受信できていないseqが残っている等）。
+		// size比較だけでは欠番を検出できず、不完全なファイルを「完成」と
+		// 誤判定してしまうため、0〜total-1が全て揃っているかを厳密に確認する。
+		const hasAllSeqs =
+			payload.total != null &&
+			(() => {
+				for (let i = 0; i < payload.total; i++) {
+					if (!state.chunks.has(i)) return false;
+				}
+				return true;
+			})();
+		if (hasAllSeqs) {
 			const buffers = Array.from(state.chunks.keys())
 				.sort((a, b) => a - b)
 				.map((k) => state.chunks.get(k));
@@ -2446,6 +2468,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		isHidden: document.visibilityState === 'hidden',
 		backgroundPeers: new Map(),
 		heartbeatTimer: null,
+		heartbeatConn: null,
 		hostTimeoutTimer: null,
 		clientTimers: new Map(),
 		localStream: null,
@@ -2561,6 +2584,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	function resetConnectionState(keepUsers, skipVoiceRestore) {
 		clearInterval(App.heartbeatTimer);
 		App.heartbeatTimer = null;
+		App.heartbeatConn = null;
 		clearTimeout(App.hostTimeoutTimer);
 		App.hostTimeoutTimer = null;
 		App.clientTimers.forEach((t) => clearTimeout(t));
@@ -3312,6 +3336,18 @@ window.addEventListener('DOMContentLoaded', () => {
 	}
 	function startClientHeartbeat(conn) {
 		resetHostTimeout();
+		App.heartbeatConn = conn;
+		restartClientHeartbeatInterval();
+	}
+	// visibilitychange などで送信間隔（フォアグラウンド/バックグラウンド）が
+	// 変わった際に、既存の setInterval を新しい間隔で張り直す。
+	// setInterval は生成時の間隔を保持し続けるため、これを呼ばないと
+	// バックグラウンド遷移後もフォアグラウンド時の短い間隔のまま送信され続けたり、
+	// 逆に復帰後もバックグラウンド時の長い間隔のままになってしまう。
+	function restartClientHeartbeatInterval() {
+		const conn = App.heartbeatConn;
+		if (!conn) return;
+		clearInterval(App.heartbeatTimer);
 		App.heartbeatTimer = setInterval(() => {
 			if (conn.open) conn.send({ t: 'sys', sub: 'heartbeat' });
 		}, getHeartbeatIntervalMs());
@@ -5224,6 +5260,9 @@ window.addEventListener('DOMContentLoaded', () => {
 	}
 	document.addEventListener('visibilitychange', async () => {
 		App.isHidden = document.visibilityState === 'hidden';
+		// setInterval は開始時の間隔のまま固定されるため、
+		// hidden 状態が変わるたびに新しい間隔で張り直す
+		restartClientHeartbeatInterval();
 		if (App.connected) {
 			try {
 				await announceBackgroundState();
