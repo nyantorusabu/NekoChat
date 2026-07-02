@@ -4176,6 +4176,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (payload.k === 'history') {
 			const newlyAdded = [];
 			const newlyDeleted = [];
+			const newlyEdited = [];
 			for (const m of payload.messages || []) {
 				if (m.uid && App.mutedUsers.has(m.uid)) continue;
 				// 送信者以外のユーザーのメッセージが含まれている場合は無視する (なりすまし防止)
@@ -4241,13 +4242,20 @@ window.addEventListener('DOMContentLoaded', () => {
 					m.file = normalizeFileMeta(m.file);
 					hydrateFilePreview(m.file, false);
 				}
-				if (
-					!App.messages.has(m.id) ||
-					(m.deleted && !App.messages.get(m.id).deleted)
-				) {
-					const wasDeleted =
-						App.messages.has(m.id) &&
-						App.messages.get(m.id).deleted;
+				const existing = App.messages.get(m.id);
+				const isEditUpdate =
+					existing &&
+					!m.deleted &&
+					!existing.deleted &&
+					((m.edited && !existing.edited) ||
+						(m.edited &&
+							existing.edited &&
+							m.edited > existing.edited) ||
+						(m.editLogs &&
+							m.editLogs.length >
+								(existing.editLogs || []).length));
+				if (!existing || (m.deleted && !existing.deleted) || isEditUpdate) {
+					const wasDeleted = existing && existing.deleted;
 					App.messages.set(m.id, m);
 					indexMessage(m);
 					if (m.deleted && !wasDeleted) {
@@ -4258,7 +4266,11 @@ window.addEventListener('DOMContentLoaded', () => {
 						}
 						newlyDeleted.push(m.id);
 					} else if (!m.deleted) {
-						newlyAdded.push(m);
+						if (existing && isEditUpdate) {
+							newlyEdited.push(m);
+						} else {
+							newlyAdded.push(m);
+						}
 					}
 				}
 			}
@@ -4267,6 +4279,9 @@ window.addEventListener('DOMContentLoaded', () => {
 			if (log && log.children.length > 0 && logChronCache.length > 0) {
 				for (const m of newlyAdded) {
 					appendMessageEl(m);
+				}
+				for (const m of newlyEdited) {
+					updateMessageTextInDom(m.id, m.text);
 				}
 				for (const id of newlyDeleted) {
 					const el = document.getElementById('m_' + id);
