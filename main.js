@@ -837,9 +837,21 @@ window.addEventListener('DOMContentLoaded', () => {
 		document.body.dataset.sidebar = open ? 'open' : 'closed';
 		if (isMobile) {
 			if (!open && wasOpen && !fromHistory) {
-				backStack.push({ type: 'sidebarClosed' });
-				history.pushState({ nk: 'sidebarClosed' }, '');
+				// サイドバーを閉じた: 直前にpushしていた履歴があれば消費して戻る。
+				// なければ（例: ルーム一覧を起点にそのまま閉じた等）何もしない。
+				const idx = backStack.findIndex((item) => item.type === 'sidebar');
+				if (idx !== -1) {
+					backStack.splice(idx, 1);
+					isInternalBack = true;
+					history.back();
+				} else {
+					backStack.push({ type: 'sidebarClosed' });
+					history.pushState({ nk: 'sidebarClosed' }, '');
+				}
 			} else if (open && !wasOpen && !fromHistory) {
+				// サイドバーを開いた: 「閉じている」ことを表す履歴が積まれていれば
+				// それを消費し、なければハンバーガーメニュー等での明示的な
+				// オープンとみなして新たに履歴を積む（＝戻る操作で閉じられるように）。
 				const idx = backStack.findIndex(
 					(item) => item.type === 'sidebarClosed',
 				);
@@ -847,6 +859,9 @@ window.addEventListener('DOMContentLoaded', () => {
 					backStack.splice(idx, 1);
 					isInternalBack = true;
 					history.back();
+				} else {
+					backStack.push({ type: 'sidebar' });
+					history.pushState({ nk: 'sidebar' }, '');
 				}
 			}
 		}
@@ -1419,7 +1434,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		const state = currentFileState(fileId);
 		state.status = 'rejected';
 		App.fileTransfers.set(state.key || fileId, state);
-		renderLog();
+		if (!updateFileMessageEl(fileId)) renderLog();
 		if (state.currentSenderUid) {
 			const ts = Date.now();
 			// targetUidは送信中断メッセージの宛先（=送信元）のUID。
@@ -1532,7 +1547,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (!best) {
 			console.warn('[FILE] selectBestRelay: offerなし→missing');
 			state.status = 'missing';
-			renderLog();
+			if (!updateFileMessageEl(fileId)) renderLog();
 			return;
 		}
 		console.log('[FILE] selectBestRelay: 選択 best=', best.uid);
@@ -2067,7 +2082,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			() => selectBestRelay(payload.fileId),
 			FILE_REQUEST_SELECT_MS,
 		);
-		renderLog();
+		if (!updateFileMessageEl(payload.fileId)) renderLog();
 	}
 
 	async function handleFileSelect(payload) {
@@ -2149,7 +2164,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		state.status = 'complete';
 		state.hint = '転送完了';
 		App.fileTransfers.set(payload.fileId, state);
-		renderLog();
+		if (!updateFileMessageEl(payload.fileId)) renderLog();
 	}
 
 	async function handleFileControl(payload) {
@@ -2187,7 +2202,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			const state = currentFileState(payload.fileId);
 			state.status = 'rejected';
 			App.fileTransfers.set(payload.fileId, state);
-			renderLog();
+			if (!updateFileMessageEl(payload.fileId)) renderLog();
 			return;
 		}
 	}
@@ -7220,11 +7235,21 @@ window.addEventListener('DOMContentLoaded', () => {
 	// 連続メッセージと見なす最大時間間隔（5分）
 	const COMPACT_MSG_MAX_GAP_MS = 5 * 60 * 1000;
 
-	function renderLog() {
+	// force=true: 常に最下部へスクロール（ルーム切替・初回表示など）
+	// force=false（既定）: 再描画前のスクロール位置を可能な限り維持する。
+	// これにより、ファイル受信/転送リクエスト等でログ全体が再描画されても、
+	// 過去ログを閲覧中のユーザーの見ている位置が勝手に最下部へ飛ばされない。
+	function renderLog(force = false) {
+		const log = document.getElementById('log');
+		// 再描画前の状態を保存（スクロール位置維持のため）
+		const hadContent = log.children.length > 0;
+		const wasNearBottom = force || !hadContent || isNearBottom(log);
+		const prevScrollHeight = log.scrollHeight;
+		const prevScrollTop = log.scrollTop;
+
 		lastDayKey = null;
 		lastRenderedMsgUid = null;
 		lastRenderedMsgTs = 0;
-		const log = document.getElementById('log');
 		log.innerHTML = '';
 		logChronCache = Array.from(App.messages.values())
 			.filter((m) => m.k === 'chat' || m.k === 'file')
@@ -7242,7 +7267,15 @@ window.addEventListener('DOMContentLoaded', () => {
 		for (let i = logRenderedFrom; i < logChronCache.length; i++) {
 			appendMessageEl(logChronCache[i]);
 		}
-		scrollLogToBottom(true);
+
+		if (wasNearBottom) {
+			scrollLogToBottom(true);
+		} else {
+			// 表示済みの範囲が変わっていなければ、スクロール量の差分だけ補正して
+			// 見ていた位置を維持する（loadMoreLogと同様の考え方）
+			const newScrollHeight = log.scrollHeight;
+			log.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+		}
 	}
 
 	// ログ先頭に監視用の見えないセンチネルを設置し、
@@ -8080,13 +8113,22 @@ window.addEventListener('DOMContentLoaded', () => {
 		}
 	}
 	// ファイル転送の進捗だけを軽量に更新する（ログ全体の再描画を避ける）
+	// 戻り値: true = DOM上のファイル要素を更新した / 対象メッセージが
+	// まだ画面外で未描画のため何もする必要がなかった（=どちらもフル再描画は不要）
+	// false = メッセージ自体が見つからず、まだ描画しようがない
 	function updateFileMessageEl(fileId) {
 		const msg = findMessageByFileId(fileId);
 		if (!msg) return false;
 		const div = document.getElementById('m_' + msg.id);
-		if (!div) return false;
+		if (!div) {
+			// 遅延読み込みで画面外にありまだDOMに描画されていないだけ。
+			// state/App.messages側は既に更新済みなので、後でスクロールして
+			// appendMessageElされる際に最新状態がそのまま反映される。
+			// ここでrenderLog()による全体再描画を行う必要はない。
+			return true;
+		}
 		const body = div.querySelector('.body');
-		if (!body) return false;
+		if (!body) return true;
 		body.innerHTML = '';
 		renderFileBody(body, msg);
 		return true;
@@ -8887,6 +8929,8 @@ window.addEventListener('DOMContentLoaded', () => {
 				setChatOpen(false, { fromHistory: true });
 			} else if (item.type === 'sidebarClosed') {
 				setSidebarOpen(true, { fromHistory: true });
+			} else if (item.type === 'sidebar') {
+				setSidebarOpen(false, { fromHistory: true });
 			}
 			return;
 		}

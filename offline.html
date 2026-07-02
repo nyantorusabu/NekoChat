@@ -286,6 +286,12 @@
 				font-family: var(--mono);
 				opacity: 0.7;
 			}
+			.msg .meta .editBadge {
+				color: var(--sub);
+				font-size: 10.5px;
+				margin-left: 4px;
+				cursor: default;
+			}
 			.msg .body {
 				font-size: 13.5px;
 				white-space: pre-wrap;
@@ -439,6 +445,58 @@
 				margin-top: 4px;
 				width: min(320px, 80vw);
 				max-width: 100%;
+			}
+
+			/* ===================== リアクション（表示のみ） ===================== */
+			img.nyaxEmoji {
+				height: 1em;
+				width: auto;
+				vertical-align: middle;
+				display: inline-block;
+				background: none;
+			}
+			.reactions {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: flex-start;
+				gap: 4px;
+				margin-top: 4px;
+			}
+			.reactions:empty {
+				display: none;
+				margin-top: 0;
+			}
+			.reactionPill {
+				display: inline-flex;
+				align-items: center;
+				gap: 4px;
+				height: 22px;
+				padding: 0 7px;
+				border: 1px solid var(--line);
+				border-radius: 11px;
+				background: var(--bg);
+				cursor: default;
+			}
+			.reactionPill.mine {
+				background: var(--accent-weak, rgba(58, 110, 90, 0.14));
+				border-color: var(--accent);
+			}
+			.reactionEmojiUnicode {
+				font-size: 13px;
+				line-height: 1;
+			}
+			.reactionEmojiImg.reactionEmojiImg {
+				width: 15px;
+				height: 15px;
+				margin: 0;
+			}
+			.reactionCount {
+				font-size: 11px;
+				color: var(--sub);
+				font-variant-numeric: tabular-nums;
+			}
+			.reactionPill.mine .reactionCount {
+				color: var(--accent);
 			}
 
 			/* ---------- file preview overlay ---------- */
@@ -1334,6 +1392,65 @@
 							e.currentTarget.classList.remove('open');
 					});
 
+				/* ----- リアクション（表示のみ。オフライン版は編集・送信不可） ----- */
+				// reactions オブジェクト（emoji -> [uid,...]）を Discord風の絵文字トークンに変換して1つのimg/spanを生成
+				function buildReactionContentEl(emoji) {
+					if (emoji.startsWith('nyax:')) {
+						const id = emoji.slice(5);
+						const img = document.createElement('img');
+						img.src = './emoji/' + encodeURIComponent(id) + '.svg';
+						img.alt = '_' + id + '_';
+						img.className = 'nyaxEmoji reactionEmojiImg';
+						return img;
+					}
+					const span = document.createElement('span');
+					span.className = 'reactionEmojiUnicode';
+					span.textContent = emoji;
+					return span;
+				}
+
+				// 指定メッセージの下にリアクションのピル一覧を描画（0件なら何もしない）
+				function renderReactionsRow(m, content) {
+					const entries = Object.entries(m.reactions || {}).filter(
+						([, uids]) => Array.isArray(uids) && uids.length > 0,
+					);
+					if (!entries.length) return;
+					const row = document.createElement('div');
+					row.className = 'reactions';
+					// 付与順を安定させるため絵文字キーでソート
+					entries.sort((a, b) => (a[0] > b[0] ? 1 : -1));
+					const myUid = App.identity && App.identity.id;
+					for (const [emoji, uids] of entries) {
+						const pill = document.createElement('button');
+						pill.type = 'button';
+						pill.disabled = true;
+						const mine = myUid && uids.includes(myUid);
+						pill.className =
+							'reactionPill' + (mine ? ' mine' : '');
+						pill.appendChild(buildReactionContentEl(emoji));
+						const count = document.createElement('span');
+						count.className = 'reactionCount';
+						count.textContent = String(uids.length);
+						pill.appendChild(count);
+						// ホバー時に誰がリアクションしたか表示
+						const names = uids
+							.map((uid) => {
+								if (myUid && uid === myUid) {
+									const prof = App.profile || {};
+									return getDisplayName({
+										uid,
+										name: prof.name,
+									});
+								}
+								return getDisplayName(resolveSender(uid));
+							})
+							.join('、');
+						pill.title = names;
+						row.appendChild(pill);
+					}
+					content.appendChild(row);
+				}
+
 				function appendMessageEl(m, log) {
 					maybeDaySeparator(m.ts, log);
 
@@ -1363,6 +1480,7 @@
 						'msg' +
 						(m.deleted ? ' deleted' : '') +
 						(isCompactMsg ? ' compact' : '');
+					div.id = 'm_' + m.id;
 
 					const av = document.createElement('div');
 					av.className = 'avatar msgAvatar';
@@ -1386,7 +1504,14 @@
 					const idSpan = document.createElement('span');
 					idSpan.className = 'msgUid';
 					idSpan.textContent = '  ·  #' + (m.uid || '').slice(0, 10);
+					idSpan.title = m.uid || '';
 					meta.appendChild(idSpan);
+					if (m.edited) {
+						const editBadge = document.createElement('span');
+						editBadge.className = 'editBadge';
+						editBadge.textContent = ' (編集済み)';
+						meta.appendChild(editBadge);
+					}
 					content.appendChild(meta);
 
 					if (m.replyTo && m.replyTo.id) {
@@ -1416,6 +1541,11 @@
 						content.appendChild(body);
 						// 5行超えの場合は折りたたむ
 						applyBodyCollapse(body);
+					}
+
+					// リアクション表示行（本文の下、Onlineモードと同じ位置）
+					if (!m.deleted) {
+						renderReactionsRow(m, content);
 					}
 
 					div.appendChild(content);
