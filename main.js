@@ -7815,7 +7815,33 @@ window.addEventListener('DOMContentLoaded', () => {
 			}
 			// タッチ端末は:hoverが働かないため、メッセージタップでアクションバーの表示をトグルする
 			// （ボタン・リンク等のタップはここでは処理しない）
+			// タップでCSS :hoverが発火する端末でも、最初のクリックがアクションバーに
+			// 奪われないようtouchstartでpointer-eventsを一時的に無効化する
+			div.addEventListener('touchstart', () => {
+				const bar = div.querySelector('.msgActionBar');
+				if (!bar) return;
+				if (bar.dataset._peGuard) {
+					bar.style.pointerEvents = '';
+					delete bar.dataset._peGuard;
+				}
+				if (!div.matches(':hover')) {
+					bar.dataset._peGuard = '1';
+					bar.style.pointerEvents = 'none';
+				}
+			}, { passive: true });
+			div.addEventListener('touchcancel', () => {
+				const bar = div.querySelector('.msgActionBar');
+				if (bar && bar.dataset._peGuard) {
+					bar.style.pointerEvents = '';
+					delete bar.dataset._peGuard;
+				}
+			});
 			div.addEventListener('click', (e) => {
+				const bar = div.querySelector('.msgActionBar');
+				if (bar && bar.dataset._peGuard) {
+					bar.style.pointerEvents = '';
+					delete bar.dataset._peGuard;
+				}
 				if (!isMobile) return;
 				if (e.target.closest('button, a, .msgActionBar')) return;
 				toggleMsgActionBar(div);
