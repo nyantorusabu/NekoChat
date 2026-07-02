@@ -41,7 +41,17 @@ self.addEventListener('install', (event) => {
 	event.waitUntil(
 		caches
 			.open(CACHE_NAME)
-			.then((cache) => cache.addAll(PRECACHE_URLS))
+			// addAll は1件でも失敗すると全体が失敗しSW自体がインストールされなくなるため、
+			// 各URLを個別にfetch/putし、失敗したものだけ警告してスキップする
+			.then((cache) =>
+				Promise.all(
+					PRECACHE_URLS.map((url) =>
+						cache.add(url).catch((err) => {
+							console.warn('Precache failed for', url, err);
+						}),
+					),
+				),
+			)
 			.then(() => self.skipWaiting()),
 	);
 });
@@ -152,6 +162,14 @@ self.addEventListener('message', (event) => {
 	if (type !== 'update-cache') return;
 
 	event.waitUntil(
-		caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)),
+		caches.open(CACHE_NAME).then((cache) =>
+			Promise.all(
+				PRECACHE_URLS.map((url) =>
+					cache.add(url).catch((err) => {
+						console.warn('Cache update failed for', url, err);
+					}),
+				),
+			),
+		),
 	);
 });

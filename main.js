@@ -136,6 +136,10 @@ window.addEventListener('DOMContentLoaded', () => {
 	// これを超えるファイルは acceptIncomingFile / handleIncomingFileChunk で拒否する
 	const FILE_MAX_SIZE_BYTES = 1024 * 1024 * 1024; // 1GB
 	const FILE_MAX_TOTAL_CHUNKS = Math.ceil(FILE_MAX_SIZE_BYTES / FILE_CHUNK_SIZE) + 1; // ~8193
+	// チャンク単体の最大許容サイズ（想定FILE_CHUNK_SIZEの余裕を見て2倍まで許容）。
+	// 悪意あるピアが total を上限内に抑えつつ個々のチャンクを異常に大きくして
+	// メモリを圧迫することを防ぐための上限。
+	const FILE_CHUNK_MAX_BYTES = FILE_CHUNK_SIZE * 2;
 
 	function requestToPromise(req) {
 		return new Promise((resolve, reject) => {
@@ -1444,6 +1448,15 @@ window.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 		// 元の送信者も含めてリクエストを送る（送信者しかファイルを持っていないケースがほとんどだから）
+		const ts = Date.now();
+		const signable = {
+			k: 'file-request',
+			fileId: file.fileId,
+			roomId: App.roomId,
+			requesterUid: Identity.id,
+			ts,
+		};
+		const sig = await signPayload(signable);
 		for (const peer of knownPeers) {
 			await sendTargeted(
 				{
@@ -1453,7 +1466,10 @@ window.addEventListener('DOMContentLoaded', () => {
 					requesterUid: Identity.id,
 					requesterName: Profile.name,
 					file: cloneFileMeta(file),
-					ts: Date.now(),
+					ts,
+					uid: Identity.id,
+					pub: Identity.pubJwk,
+					sig,
 				},
 				peer.uid,
 			);
@@ -1752,6 +1768,16 @@ window.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 		const buf = bufFromB64(payload.chunkB64);
+		// V-02: 個々のチャンクが想定サイズを著しく超えていないか確認する。
+		// total/size のチェックだけでは、悪意あるピアが単一チャンクを
+		// 異常に大きくしてメモリを圧迫することを防げないため。
+		if (buf.byteLength > FILE_CHUNK_MAX_BYTES) {
+			console.warn(
+				'[FILE] handleIncomingFileChunk: チャンクサイズ上限超過のため拒否',
+				{ fileId: payload.fileId, seq: payload.seq, size: buf.byteLength },
+			);
+			return;
+		}
 		const actual = await digestHex(buf);
 		if (actual !== payload.chunkHash) {
 			console.warn('chunk hash mismatch');
@@ -1759,6 +1785,15 @@ window.addEventListener('DOMContentLoaded', () => {
 		}
 		state.totalBytes = safeBytes(file.size);
 		state.chunks = state.chunks || new Map();
+		// 同一seqの再受信（再送等）では、既存チャンク分のバイト数を差し引いてから
+		// 加算することで receivedBytes の二重カウントを防ぐ
+		const prevChunk = state.chunks.get(payload.seq);
+		if (prevChunk) {
+			state.receivedBytes = Math.max(
+				0,
+				(state.receivedBytes || 0) - prevChunk.byteLength,
+			);
+		}
 		state.chunks.set(payload.seq, buf);
 		state.receivedBytes = Math.min(
 			state.totalBytes,
@@ -1897,6 +1932,40 @@ window.addEventListener('DOMContentLoaded', () => {
 	async function handleFileRequest(payload) {
 		console.log('[FILE] handleFileRequest受信', payload);
 		if (!payload?.fileId || payload.requesterUid === Identity.id) return;
+		// 他のfile-*ハンドラと同様に、署名検証で requesterUid のなりすましを防ぐ。
+		// 検証なしで応答すると、第三者が requesterUid を詐称して任意の相手に
+		// file-offer（ファイル保有の事実・速度情報）を送信させることができてしまう。
+		if (!payload.pub || !payload.sig || !payload.uid) {
+			console.warn('[FILE] handleFileRequest: pub/sig/uid欠如');
+			return;
+		}
+		const ok = await verifyPayload(
+			{
+				k: 'file-request',
+				fileId: payload.fileId,
+				roomId: App.roomId,
+				requesterUid: payload.requesterUid,
+				ts: payload.ts,
+			},
+			payload.sig,
+			payload.pub,
+			payload.uid,
+		);
+		if (!ok) {
+			console.warn(
+				'[FILE] handleFileRequest: 署名検証失敗 uid=',
+				payload.uid,
+			);
+			return;
+		}
+		// requesterUid は署名した本人（payload.uid）と一致していなければならない
+		// （第三者が別人のIDをrequesterUidに詐称して署名だけ自分のものを付ける攻撃を防ぐ）
+		if (payload.requesterUid !== payload.uid) {
+			console.warn(
+				'[FILE] handleFileRequest: requesterUidと署名者が不一致のため拒否',
+			);
+			return;
+		}
 		const file = payload.file || findMessageByFileId(payload.fileId)?.file;
 		if (!file || !file.fileId) {
 			console.warn(
@@ -2024,7 +2093,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 	async function handleFileComplete(payload) {
 		if (!payload?.fileId) return;
-		if (!payload.pub || !payload.sig || !payload.uid) return;
+		// 送信側は uid ではなく fromUid で署名しているため、fromUid を基準に検証する。
+		// （旧実装は payload.uid を要求していたが、送信側が uid を送っていないため
+		//   常に検証をすり抜けず file-complete が無視されるバグがあった）
+		if (!payload.pub || !payload.sig || !payload.fromUid) return;
 		const ok = await verifyPayload(
 			{
 				k: 'file-complete',
@@ -2038,9 +2110,10 @@ window.addEventListener('DOMContentLoaded', () => {
 			},
 			payload.sig,
 			payload.pub,
-			payload.uid,
+			payload.fromUid,
 		);
 		if (!ok) return;
+		if (payload.toUid && payload.toUid !== Identity.id) return;
 		const state = currentFileState(payload.fileId);
 		state.status = 'complete';
 		state.hint = '転送完了';
