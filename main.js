@@ -8887,9 +8887,6 @@ window.addEventListener('DOMContentLoaded', () => {
 				setChatOpen(false, { fromHistory: true });
 			} else if (item.type === 'sidebarClosed') {
 				setSidebarOpen(true, { fromHistory: true });
-				if (App.roomId) {
-					leaveCurrentRoom();
-				}
 			}
 			return;
 		}
