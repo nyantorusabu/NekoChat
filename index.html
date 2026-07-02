@@ -330,14 +330,47 @@
 										/>
 									</svg>
 								</button>
+								<button id="btnEmoji" title="絵文字">
+									<svg
+										style="
+											width: 14px;
+											height: 14px;
+											fill: none;
+											stroke: currentColor;
+											stroke-width: 1.8;
+											stroke-linecap: round;
+											stroke-linejoin: round;
+										"
+										viewBox="0 0 24 24"
+									>
+										<circle cx="12" cy="12" r="10" />
+										<path d="M8 14s1.5 2 4 2 4-2 4-2" />
+										<line x1="9" y1="9" x2="9.01" y2="9" />
+										<line x1="15" y1="9" x2="15.01" y2="9" />
+									</svg>
+								</button>
 								<input type="file" id="fileInput" />
 								<textarea
 									id="msgInput"
 									placeholder="メッセージを入力"
 									rows="1"
 								></textarea>
-								<button id="btnSend" class="primary">
-									送信
+								<button id="btnSend" class="primary" title="送信">
+									<svg
+										style="
+											width: 16px;
+											height: 16px;
+											fill: none;
+											stroke: currentColor;
+											stroke-width: 1.8;
+											stroke-linecap: round;
+											stroke-linejoin: round;
+										"
+										viewBox="0 0 24 24"
+									>
+										<line x1="22" y1="2" x2="11" y2="13" />
+										<polygon points="22 2 15 22 11 13 2 9 22 2" />
+									</svg>
 								</button>
 							</div>
 						</div>
@@ -687,6 +720,7 @@
 		</div>
 
 		<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
 		<script src="./main.js"></script>
 		<script>
 			// Service Worker登録: オフライン時にoffline.htmlを表示できるようにし、

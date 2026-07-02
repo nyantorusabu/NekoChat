@@ -51,7 +51,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	}
 	/* ---------- showAlert / showConfirm ---------- */
 	function _openDialog({ title, message, buttons }) {
-		const ov  = document.getElementById('ovDialog');
+		const ov = document.getElementById('ovDialog');
 		const ttl = document.getElementById('dialogTitle');
 		const msg = document.getElementById('dialogMessage');
 		const act = document.getElementById('dialogActions');
@@ -100,8 +100,16 @@ window.addEventListener('DOMContentLoaded', () => {
 				title: title || '確認',
 				message,
 				buttons: [
-					{ label: 'キャンセル', cls: '', resolve: () => resolve(false) },
-					{ label: 'OK',         cls: 'primary', resolve: () => resolve(true) },
+					{
+						label: 'キャンセル',
+						cls: '',
+						resolve: () => resolve(false),
+					},
+					{
+						label: 'OK',
+						cls: 'primary',
+						resolve: () => resolve(true),
+					},
 				],
 			});
 		});
@@ -135,7 +143,8 @@ window.addEventListener('DOMContentLoaded', () => {
 	// V-02: ファイル受信サイズの上限（1GB）とチャンク数の上限
 	// これを超えるファイルは acceptIncomingFile / handleIncomingFileChunk で拒否する
 	const FILE_MAX_SIZE_BYTES = 1024 * 1024 * 1024; // 1GB
-	const FILE_MAX_TOTAL_CHUNKS = Math.ceil(FILE_MAX_SIZE_BYTES / FILE_CHUNK_SIZE) + 1; // ~8193
+	const FILE_MAX_TOTAL_CHUNKS =
+		Math.ceil(FILE_MAX_SIZE_BYTES / FILE_CHUNK_SIZE) + 1; // ~8193
 	// チャンク単体の最大許容サイズ（想定FILE_CHUNK_SIZEの余裕を見て2倍まで許容）。
 	// 悪意あるピアが total を上限内に抑えつつ個々のチャンクを異常に大きくして
 	// メモリを圧迫することを防ぐための上限。
@@ -460,7 +469,9 @@ window.addEventListener('DOMContentLoaded', () => {
 								}
 							});
 							const avgJitter = count ? jitterSum / count : 0;
-							const avgLossScore = count ? deltaLossSum / count : 0;
+							const avgLossScore = count
+								? deltaLossSum / count
+								: 0;
 							// 合成スコア: loss EMA と jitter を加重合成 (0~1)
 							// jitter閾値: 20ms以上で影響が出始め、60ms超で最悪スコア
 							const jitterScore = Math.max(
@@ -469,7 +480,11 @@ window.addEventListener('DOMContentLoaded', () => {
 							);
 							const score = Math.max(
 								0,
-								Math.min(1, (1 - avgLossScore) * 0.65 + jitterScore * 0.35),
+								Math.min(
+									1,
+									(1 - avgLossScore) * 0.65 +
+										jitterScore * 0.35,
+								),
 							);
 
 							// バッファ範囲: 20ms（良好）〜 600ms（劣悪）
@@ -483,11 +498,15 @@ window.addEventListener('DOMContentLoaded', () => {
 								pc.getReceivers().forEach((r) => {
 									if (!r.track) return;
 									// jitterBufferTarget が使えるブラウザ（Chrome 87+）
-									if (typeof r.jitterBufferTarget === 'number') {
+									if (
+										typeof r.jitterBufferTarget === 'number'
+									) {
 										r.jitterBufferTarget = targetSec;
 									}
 									// playoutDelayHint が使えるブラウザ（Safari / Firefox）
-									if (typeof r.playoutDelayHint === 'number') {
+									if (
+										typeof r.playoutDelayHint === 'number'
+									) {
 										r.playoutDelayHint = targetSec;
 									}
 								});
@@ -781,7 +800,9 @@ window.addEventListener('DOMContentLoaded', () => {
 		const stage = document.getElementById('mediaFullscreenStage');
 		if (stage) stage.innerHTML = '';
 		if (!fromHistory) {
-			const idx = backStack.findIndex((item) => item.type === 'mediaFullscreen');
+			const idx = backStack.findIndex(
+				(item) => item.type === 'mediaFullscreen',
+			);
 			if (idx !== -1) {
 				backStack.splice(idx, 1);
 				isInternalBack = true;
@@ -819,7 +840,9 @@ window.addEventListener('DOMContentLoaded', () => {
 				backStack.push({ type: 'sidebarClosed' });
 				history.pushState({ nk: 'sidebarClosed' }, '');
 			} else if (open && !wasOpen && !fromHistory) {
-				const idx = backStack.findIndex((item) => item.type === 'sidebarClosed');
+				const idx = backStack.findIndex(
+					(item) => item.type === 'sidebarClosed',
+				);
 				if (idx !== -1) {
 					backStack.splice(idx, 1);
 					isInternalBack = true;
@@ -1051,7 +1074,13 @@ window.addEventListener('DOMContentLoaded', () => {
 		);
 		return b64FromBuf(sig);
 	}
-	async function verifyPayload(signable, sigB64, pubJwk, expectUid, skipTimestampCheck = false) {
+	async function verifyPayload(
+		signable,
+		sigB64,
+		pubJwk,
+		expectUid,
+		skipTimestampCheck = false,
+	) {
 		try {
 			if ((await hashPub(pubJwk)) !== expectUid) return false;
 			// クロスルーム再送攻撃（リプレイ）を防ぐため、ルームIDが一致するか検証
@@ -1062,7 +1091,8 @@ window.addEventListener('DOMContentLoaded', () => {
 				const now = Date.now();
 				if (
 					signable.ts &&
-					(signable.ts > now + 90 * 1000 || signable.ts < now - 90 * 1000)
+					(signable.ts > now + 90 * 1000 ||
+						signable.ts < now - 90 * 1000)
 				)
 					return false;
 			}
@@ -1334,11 +1364,17 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (declaredSize > FILE_MAX_SIZE_BYTES) {
 			console.warn(
 				'[FILE] acceptIncomingFile: ファイルサイズ上限超過のため拒否',
-				{ fileId: file.fileId, size: declaredSize, limit: FILE_MAX_SIZE_BYTES },
+				{
+					fileId: file.fileId,
+					size: declaredSize,
+					limit: FILE_MAX_SIZE_BYTES,
+				},
 			);
 			s.status = 'rejected';
 			App.fileTransfers.set(file.fileId, s);
-			toast('ファイルサイズが上限（1GB）を超えているため受信を拒否しました');
+			toast(
+				'ファイルサイズが上限（1GB）を超えているため受信を拒否しました',
+			);
 			return;
 		}
 		s.status = 'receiving';
@@ -1749,7 +1785,8 @@ window.addEventListener('DOMContentLoaded', () => {
 			payload.seq < 0 ||
 			(payload.total != null &&
 				// V-02: チャンク総数の上限を FILE_MAX_TOTAL_CHUNKS に絞る（旧: 1e7 = 1.28TB相当）
-				(payload.seq >= payload.total || payload.total > FILE_MAX_TOTAL_CHUNKS))
+				(payload.seq >= payload.total ||
+					payload.total > FILE_MAX_TOTAL_CHUNKS))
 		) {
 			console.warn('不正なchunk seq/totalを拒否');
 			return;
@@ -1774,7 +1811,11 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (buf.byteLength > FILE_CHUNK_MAX_BYTES) {
 			console.warn(
 				'[FILE] handleIncomingFileChunk: チャンクサイズ上限超過のため拒否',
-				{ fileId: payload.fileId, seq: payload.seq, size: buf.byteLength },
+				{
+					fileId: payload.fileId,
+					seq: payload.seq,
+					size: buf.byteLength,
+				},
 			);
 			return;
 		}
@@ -2233,19 +2274,34 @@ window.addEventListener('DOMContentLoaded', () => {
 	// - それ以外: 'application/octet-stream' にフォールバック（ダウンロード専用扱い）
 	// text/html, text/javascript 等のスクリプト実行可能タイプは意図的に除外する。
 	const ALLOWED_MIME_MAP = {
-		'image/jpeg': true, 'image/png': true, 'image/gif': true,
-		'image/webp': true, 'image/bmp': true, 'image/tiff': true,
-		'video/mp4': true, 'video/webm': true, 'video/ogg': true,
-		'video/quicktime': true, 'video/x-matroska': true,
-		'audio/mpeg': true, 'audio/ogg': true, 'audio/wav': true,
-		'audio/webm': true, 'audio/aac': true, 'audio/flac': true,
-		'audio/x-m4a': true, 'audio/mp4': true,
+		'image/jpeg': true,
+		'image/png': true,
+		'image/gif': true,
+		'image/webp': true,
+		'image/bmp': true,
+		'image/tiff': true,
+		'video/mp4': true,
+		'video/webm': true,
+		'video/ogg': true,
+		'video/quicktime': true,
+		'video/x-matroska': true,
+		'audio/mpeg': true,
+		'audio/ogg': true,
+		'audio/wav': true,
+		'audio/webm': true,
+		'audio/aac': true,
+		'audio/flac': true,
+		'audio/x-m4a': true,
+		'audio/mp4': true,
 		'application/pdf': true,
-		'application/zip': true, 'application/x-zip-compressed': true,
-		'text/plain': true, 'text/csv': true,
+		'application/zip': true,
+		'application/x-zip-compressed': true,
+		'text/plain': true,
+		'text/csv': true,
 	};
 	function safeMimeType(mime) {
-		if (!mime || typeof mime !== 'string') return 'application/octet-stream';
+		if (!mime || typeof mime !== 'string')
+			return 'application/octet-stream';
 		const lower = mime.toLowerCase().trim();
 		if (ALLOWED_MIME_MAP[lower]) return lower;
 		// 許可リスト外は強制的にダウンロード専用MIMEに変換（text/html等のXSS源を無効化）
@@ -2254,7 +2310,9 @@ window.addEventListener('DOMContentLoaded', () => {
 	// 受信MIMEがプレビュー可能かどうかの判定（safeMimeType通過後に使う）
 	function isSafeMimePreviewable(mime) {
 		if (!mime) return false;
-		return /^(image\/(jpeg|png|gif|webp|bmp|tiff)|video\/(mp4|webm|ogg|quicktime|x-matroska)|audio\/(mpeg|ogg|wav|webm|aac|flac|x-m4a|mp4))$/.test(mime.toLowerCase());
+		return /^(image\/(jpeg|png|gif|webp|bmp|tiff)|video\/(mp4|webm|ogg|quicktime|x-matroska)|audio\/(mpeg|ogg|wav|webm|aac|flac|x-m4a|mp4))$/.test(
+			mime.toLowerCase(),
+		);
 	}
 
 	// Issue 1 & 9: image フィールドの Data URL を厳密に検証し、
@@ -2425,6 +2483,22 @@ window.addEventListener('DOMContentLoaded', () => {
 					}
 					copy.file = file;
 				}
+				// reactions は Set を値に持つため JSON化できるよう配列へ変換して保存する
+				if (copy.reactions && typeof copy.reactions === 'object') {
+					const r = {};
+					for (const [emoji, setLike] of Object.entries(
+						copy.reactions,
+					)) {
+						const arr =
+							setLike instanceof Set
+								? Array.from(setLike)
+								: Array.isArray(setLike)
+									? setLike
+									: [];
+						if (arr.length) r[emoji] = arr;
+					}
+					copy.reactions = r;
+				}
 				return copy;
 			});
 			try {
@@ -2544,6 +2618,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		heartbeatConn: null,
 		hostTimeoutTimer: null,
 		clientTimers: new Map(),
+		hostSelfPingTimer: null,
 		localStream: null,
 		screenStream: null,
 		muted: false,
@@ -2662,6 +2737,8 @@ window.addEventListener('DOMContentLoaded', () => {
 		App.hostTimeoutTimer = null;
 		App.clientTimers.forEach((t) => clearTimeout(t));
 		App.clientTimers.clear();
+		clearInterval(App.hostSelfPingTimer);
+		App.hostSelfPingTimer = null;
 		App.fileTransfers.forEach((state) => {
 			if (state && state.requestTimer) clearTimeout(state.requestTimer);
 		});
@@ -2822,14 +2899,35 @@ window.addEventListener('DOMContentLoaded', () => {
 
 					const hp = new Peer(hostPeerId(targetRoomId), STUN_CONFIG);
 					App.peer = hp;
+					// 昇格成功後は close/disconnected の「復旧用ロジック」を
+					// 無効化するためのフラグ（昇格後は別の再接続経路で処理する）
+					let promoted = false;
 
 					hp.on('disconnected', () => {
-						if (!isActive()) return;
+						if (promoted || !isActive()) return;
 						if (!hp.destroyed) {
 							try {
 								hp.reconnect();
 							} catch (e) {}
 						}
+					});
+
+					// PeerJSのシグナリングサーバーへの接続が完全に閉じられた場合
+					// （'disconnected'とは異なり reconnect() では復帰できない状態）。
+					// 参加者がいない「自分だけ」の部屋では通信が発生しないため
+					// サーバー・中継プロキシ側のアイドルタイムアウトで
+					// ソケットが切られたまま気づかず放置されるケースがあった。
+					// close を検知したら peer を作り直してホスト昇格からやり直す。
+					// ただし昇格成功後（promoted）にこのリスナーが遅延発火すると
+					// 既に確立済みのホストセッションに対してさらに attemptHost() が
+					// 呼ばれ、余分な Peer が生成されてしまうためガードする。
+					hp.on('close', () => {
+						if (promoted || !isActive()) return;
+						App.connected = false;
+						setStatus(false, '接続中...');
+						setTimeout(() => {
+							if (isActive()) attemptHost();
+						}, 500);
 					});
 
 					hp.once('open', () => {
@@ -2840,6 +2938,7 @@ window.addEventListener('DOMContentLoaded', () => {
 							return;
 						}
 						// 昇格成功
+						promoted = true;
 						App.isHost = true;
 						App.connected = true;
 						const selfUid = Identity.id;
@@ -2864,6 +2963,7 @@ window.addEventListener('DOMContentLoaded', () => {
 							App.userConnections.set(Identity.id, new Set());
 						App.userConnections.get(Identity.id).add(hp.id);
 						setupHostHandlers(hp);
+						startHostSelfKeepalive(hp);
 						setStatus(true, '接続済み');
 						App.reconnecting = false;
 						App._reconnectAttempt = 0;
@@ -2874,19 +2974,37 @@ window.addEventListener('DOMContentLoaded', () => {
 							App._prevReconnecting = false;
 							toast('再接続しました');
 						}
-						if (App._wasInVoice && !App.localStream && !App.isHidden) {
+						if (
+							App._wasInVoice &&
+							!App.localStream &&
+							!App.isHidden
+						) {
 							rejoinVoiceAfterReconnect();
-						} else if (isVoiceMode() && !App.localStream && !App.isHidden) {
+						} else if (
+							isVoiceMode() &&
+							!App.localStream &&
+							!App.isHidden
+						) {
 							openVoiceJoinModal();
 							clearVoiceModeParam();
 						}
 					});
 
 					hp.on('error', (err) => {
+						// 昇格成功後（promoted）は、このリスナーは無効化する。
+						// 以前は promoted チェックより前に hp.destroy() を
+						// 実行してしまっており、シグナリングWebSocket自体は
+						// 生きたまま発生する軽微・無関係なエラー
+						// （例: 別ピアへの connect() 試行に対する
+						// peer-unavailable など、既存のホスト接続には
+						// 影響しないエラー）でも、確立済みのホスト用 Peer が
+						// 誤って破棄されてしまっていた。
+						// これが「実際には接続が切れていないのに、
+						// システム側の勘違いで切断扱いになる」不具合の原因。
+						if (promoted || !isActive()) return;
 						try {
 							hp.destroy();
 						} catch (e) {}
-						if (!isActive()) return;
 						if (err.type !== 'unavailable-id') {
 							console.warn('Host peer error:', err);
 							// 予期しないエラー → 少し待ってホスト再試行
@@ -3029,8 +3147,10 @@ window.addEventListener('DOMContentLoaded', () => {
 			};
 
 			peer.on('disconnected', () => {
-				// ルームが切り替わっていたら再接続しない
-				if (!isActive()) return;
+				// 既に settled 済み（ホスト昇格 or ゲスト接続確定）なら
+				// この peer はもう役目を終えているため何もしない
+				// （destroy() 後に disconnected が遅延発火するケースへのガード）
+				if (settled || !isActive()) return;
 				if (!peer.destroyed && !shouldRelaxBackground()) {
 					try {
 						peer.reconnect();
@@ -3106,9 +3226,17 @@ window.addEventListener('DOMContentLoaded', () => {
 							toast('再接続しました');
 						}
 						// 再接続前にボイスチャット参加中だった場合は自動復帰
-						if (App._wasInVoice && !App.localStream && !App.isHidden) {
+						if (
+							App._wasInVoice &&
+							!App.localStream &&
+							!App.isHidden
+						) {
 							rejoinVoiceAfterReconnect();
-						} else if (isVoiceMode() && !App.localStream && !App.isHidden) {
+						} else if (
+							isVoiceMode() &&
+							!App.localStream &&
+							!App.isHidden
+						) {
 							openVoiceJoinModal();
 							clearVoiceModeParam();
 						}
@@ -3146,12 +3274,23 @@ window.addEventListener('DOMContentLoaded', () => {
 
 			peer.on('error', (err) => {
 				if (settled || !isActive()) return; // 既に決着済みは無視
-				if (err.type === 'unavailable-id' && !suffix) {
-					// 自分の userPeer ID が競合 → suffix 付きで再試行
-					try {
-						peer.destroy();
-					} catch (e) {}
-					startPeer(Math.random().toString(36).slice(2, 6));
+				if (err.type === 'unavailable-id') {
+					// userPeerId は roomId + 自分の Identity.id から決定的に
+					// 生成されるため、他人と衝突することは基本的にない。
+					// これが発生するのは「直前セッションの自分自身の Peer 登録が
+					// シグナリングサーバー側でまだ解放されていない」ケースがほぼ全て。
+					// 以前は suffix 付きで新しい userPeerId を作って再度「通常接続試行」を
+					// やり直していたが、これは以下の理由で無駄な1往復（余分な Peer 生成）
+					// を生んでいた:
+					//   - suffix 版の Peer で open してもホストが既にいなければ結局
+					//     peer-unavailable → tryBecomeHost() に行き着くだけ
+					//   - ホストが実際にいる場合でも、直後の attemptHost() 側の
+					//     unavailable-id ハンドリング（ゲスト再試行）で十分カバーできる
+					// そのため、自分自身のID衝突は「通常接続試行の失敗」として扱い、
+					// 直接ホスト昇格フローに進める。
+					// これにより理論値通り「通常接続試行1回 → ホスト試行1回」の
+					// 2 Peer で完結するようになる。
+					tryBecomeHost();
 				} else if (err.type === 'peer-unavailable') {
 					// ホスト不在が確定 → 昇格
 					tryBecomeHost();
@@ -3203,6 +3342,33 @@ window.addEventListener('DOMContentLoaded', () => {
 	function setupHostHandlers(peer) {
 		peer.on('connection', (conn) => setupHostIncomingConn(conn));
 		setupPeerCallHandler(peer);
+	}
+
+	// 参加者がいない「自分だけ」の部屋では、通信が全く発生せず
+	// シグナリング用WebSocketがアイドル状態のまま放置される。
+	// 中継プロキシ等がアイドル接続を無言で切断することがあり、
+	// PeerJSの'disconnected'/'close'イベントが発火するまで気づけない。
+	// 定期的に自分自身へごく軽量なping相当のチェックを行い、
+	// 切断済み（disconnected）を検知した場合は即座に reconnect() する。
+	function startHostSelfKeepalive(peer) {
+		clearInterval(App.hostSelfPingTimer);
+		App.hostSelfPingTimer = setInterval(() => {
+			if (!App.isHost || App.peer !== peer) {
+				clearInterval(App.hostSelfPingTimer);
+				App.hostSelfPingTimer = null;
+				return;
+			}
+			if (peer.destroyed) {
+				clearInterval(App.hostSelfPingTimer);
+				App.hostSelfPingTimer = null;
+				return;
+			}
+			if (peer.disconnected) {
+				try {
+					peer.reconnect();
+				} catch (e) {}
+			}
+		}, HEARTBEAT_MS);
 	}
 
 	function setupHostIncomingConn(conn) {
@@ -3488,7 +3654,9 @@ window.addEventListener('DOMContentLoaded', () => {
 							(App.roomOption.updatedAt || 0)
 					)
 						applyRoomOption(data.payload.roomOption);
-					const hostUid = (data.payload.myInfo && data.payload.myInfo.uid) || senderUid;
+					const hostUid =
+						(data.payload.myInfo && data.payload.myInfo.uid) ||
+						senderUid;
 					await applyAppMessage(hostUid, {
 						k: 'history',
 						messages: data.payload.messages,
@@ -3540,7 +3708,11 @@ window.addEventListener('DOMContentLoaded', () => {
 						renderUserPopover();
 						renderVoiceScreen();
 						renderLog();
-						if (App.localStream && !App.isHidden && ju.uid !== Identity.id) {
+						if (
+							App.localStream &&
+							!App.isHidden &&
+							ju.uid !== Identity.id
+						) {
 							callUser(ju.uid);
 							if (App.screenOn) callScreenUser(ju.uid);
 						}
@@ -3601,7 +3773,14 @@ window.addEventListener('DOMContentLoaded', () => {
 				}
 				case 'background-policy': {
 					const bp = data.payload || {};
-					if (!bp || !bp.uid || !bp.pub || !bp.sig || typeof bp.ts !== 'number') break;
+					if (
+						!bp ||
+						!bp.uid ||
+						!bp.pub ||
+						!bp.sig ||
+						typeof bp.ts !== 'number'
+					)
+						break;
 					const ok = await verifyPayload(
 						{
 							k: 'background-policy',
@@ -3691,7 +3870,11 @@ window.addEventListener('DOMContentLoaded', () => {
 					// senderUid と payload.uid が一致する場合のみ受け入れ・転送する。
 					// クライアントがホストから受け取る場合は senderUid が '__host__' なので
 					// ホスト経由のブロードキャストを通す。
-					if (vs && vs.uid && (senderUid === '__host__' || senderUid === vs.uid)) {
+					if (
+						vs &&
+						vs.uid &&
+						(senderUid === '__host__' || senderUid === vs.uid)
+					) {
 						setSpeakingFlag(vs.uid, vs.kind, vs.active);
 						if (App.isHost) broadcast(data);
 					}
@@ -3703,14 +3886,18 @@ window.addEventListener('DOMContentLoaded', () => {
 					// ホスト経由のブロードキャスト（senderUid === '__host__'）は通す。
 					// uid 不一致のメッセージはホストも他クライアントへ転送しない。
 					if (
-						vc && vc.uid &&
+						vc &&
+						vc.uid &&
 						vc.uid !== Identity.id &&
 						typeof vc.text === 'string' &&
 						(senderUid === '__host__' || senderUid === vc.uid)
 					) {
 						// DoS 防止: テキストを 500 文字に切り詰める
 						const safeText = vc.text.slice(0, 500);
-						App.captions.set(vc.uid, { text: safeText, ts: vc.ts || Date.now() });
+						App.captions.set(vc.uid, {
+							text: safeText,
+							ts: vc.ts || Date.now(),
+						});
 						// isFinal が明示されている場合は音声認識中のタイピングドットを管理する。
 						// interim（認識途中）なら点滅ドットを表示、final（確定）なら消す。
 						// isFinal が未定義の古いクライアントとも互換性を保つため、
@@ -3749,11 +3936,16 @@ window.addEventListener('DOMContentLoaded', () => {
 			// 署名検証は各ハンドラで行われるが、fromUid を詐称した場合に
 			// ホストが誤った senderUid でブロードキャストしてしまう問題をここで防ぐ。
 			const FILE_RELAY_TYPES = new Set([
-				'file-chunk', 'file-offer', 'file-select',
-				'file-request', 'file-control', 'file-complete',
+				'file-chunk',
+				'file-offer',
+				'file-select',
+				'file-request',
+				'file-control',
+				'file-complete',
 			]);
 			if (data.payload && FILE_RELAY_TYPES.has(data.payload.k)) {
-				const payloadSender = data.payload.fromUid || data.payload.uid || null;
+				const payloadSender =
+					data.payload.fromUid || data.payload.uid || null;
 				if (payloadSender && payloadSender !== senderUid) {
 					console.warn(
 						'[V-03] ファイル系relayのfromUid/uidが接続ユーザーと不一致のため拒否しました',
@@ -4055,7 +4247,9 @@ window.addEventListener('DOMContentLoaded', () => {
 					!App.messages.has(m.id) ||
 					(m.deleted && !App.messages.get(m.id).deleted)
 				) {
-					const wasDeleted = App.messages.has(m.id) && App.messages.get(m.id).deleted;
+					const wasDeleted =
+						App.messages.has(m.id) &&
+						App.messages.get(m.id).deleted;
 					App.messages.set(m.id, m);
 					indexMessage(m);
 					if (m.deleted && !wasDeleted) {
@@ -4115,19 +4309,28 @@ window.addEventListener('DOMContentLoaded', () => {
 			persistIfNeeded();
 			appendMessageEl(payload);
 			scrollLogToBottom();
-			if (document.visibilityState === 'hidden' && payload.k === 'chat' && payload.uid !== Identity.id) {
+			if (
+				document.visibilityState === 'hidden' &&
+				payload.k === 'chat' &&
+				payload.uid !== Identity.id
+			) {
 				// Android などのホスト実装側で後から通知を拡張できるように、
 				// NCWeb 本体は通常のメッセージ受信処理のままにしておく。
 				try {
-					window.dispatchEvent(new CustomEvent('ncweb:message-received', {
-						detail: {
-							uid: payload.uid,
-							name: payload.name || 'User',
-							text: payload.text || '',
-							roomId: App.roomId,
-							roomName: App.roomOption && App.roomOption.name ? App.roomOption.name : (App.roomId || ''),
-						},
-					}));
+					window.dispatchEvent(
+						new CustomEvent('ncweb:message-received', {
+							detail: {
+								uid: payload.uid,
+								name: payload.name || 'User',
+								text: payload.text || '',
+								roomId: App.roomId,
+								roomName:
+									App.roomOption && App.roomOption.name
+										? App.roomOption.name
+										: App.roomId || '',
+							},
+						}),
+					);
 				} catch (e) {}
 			}
 
@@ -4165,8 +4368,11 @@ window.addEventListener('DOMContentLoaded', () => {
 				// B1 fix: payload.file が null の場合でも安全にテキストを生成する
 				const capText =
 					payload.k === 'file'
-						? 'ファイル: ' + (payload.file && payload.file.name ? payload.file.name : '（不明）')
-						: (payload.text || '');
+						? 'ファイル: ' +
+							(payload.file && payload.file.name
+								? payload.file.name
+								: '（不明）')
+						: payload.text || '';
 				App.captions.set(payload.uid, {
 					text: capText,
 					ts: payload.ts,
@@ -4176,9 +4382,14 @@ window.addEventListener('DOMContentLoaded', () => {
 				}
 				// B3 fix: SpeechSynthesis 非サポート環境でのエラーを防ぐ
 				if (App.ttsOn && payload.k === 'chat' && payload.text) {
-					if (typeof speechSynthesis !== 'undefined' && speechSynthesis.speak) {
+					if (
+						typeof speechSynthesis !== 'undefined' &&
+						speechSynthesis.speak
+					) {
 						try {
-							const u = new SpeechSynthesisUtterance(payload.text);
+							const u = new SpeechSynthesisUtterance(
+								payload.text,
+							);
 							u.lang = 'ja-JP';
 							speechSynthesis.speak(u);
 						} catch (e) {}
@@ -4224,6 +4435,44 @@ window.addEventListener('DOMContentLoaded', () => {
 					App.fileTransfers.delete(m.file.fileId);
 				}
 			}
+			return;
+		}
+		if (payload.k === 'reaction') {
+			if (!payload.pub || !payload.sig || !payload.uid) return;
+			const m = App.messages.get(payload.id);
+			if (!m || m.deleted) return;
+			// emojiキーは Unicode絵文字 または NyaXEmoji id（"nyax:xxxx"）のみ許容
+			if (
+				typeof payload.emoji !== 'string' ||
+				!isValidReactionEmoji(payload.emoji)
+			)
+				return;
+			const ok = await verifyPayload(
+				{
+					k: 'reaction',
+					id: payload.id,
+					uid: payload.uid,
+					roomId: App.roomId,
+					emoji: payload.emoji,
+					active: !!payload.active,
+					ts: payload.ts,
+				},
+				payload.sig,
+				payload.pub,
+				payload.uid,
+			);
+			if (!ok) {
+				console.warn('リアクションの署名検証に失敗しました');
+				return;
+			}
+			applyReactionToMessage(
+				m,
+				payload.uid,
+				payload.emoji,
+				!!payload.active,
+			);
+			persistIfNeeded();
+			updateReactionsEl(m);
 			return;
 		}
 		if (payload.k === 'typing') {
@@ -4298,8 +4547,11 @@ window.addEventListener('DOMContentLoaded', () => {
 			// B7 fix: payload.file が null の場合でも安全にテキストを生成する
 			const selfCapText =
 				payload.k === 'file'
-					? 'ファイル: ' + (payload.file && payload.file.name ? payload.file.name : '（不明）')
-					: (payload.text || '');
+					? 'ファイル: ' +
+						(payload.file && payload.file.name
+							? payload.file.name
+							: '（不明）')
+					: payload.text || '';
 			App.captions.set(Identity.id, {
 				text: selfCapText,
 				ts: payload.ts,
@@ -4344,6 +4596,407 @@ window.addEventListener('DOMContentLoaded', () => {
 		distribute({
 			k: 'history',
 			messages,
+		});
+	}
+
+	/* ===================== リアクション ===================== */
+
+	// emojiキーの妥当性チェック：Unicode絵文字（短い文字列）または NyaXEmoji id（"nyax:xxxx"）
+	/* ===================== よく使うリアクション（使用回数ベース） ===================== */
+	const RecentReactions = (() => {
+		const KEY = 'nekochat_reaction_usage';
+		const LEGACY_KEY = 'nekochat_recent_reactions'; // 旧「直近使用」形式（配列）からの移行用
+		const MAX = 5;
+		// emoji -> 使用回数 のマップ
+		let counts = new Map();
+		try {
+			const raw = JSON.parse(localStorage.getItem(KEY) || 'null');
+			if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+				for (const [k, v] of Object.entries(raw)) {
+					if (typeof k === 'string' && Number.isFinite(v) && v > 0) {
+						counts.set(k, v);
+					}
+				}
+			} else {
+				// 旧形式（直近使用の配列）が残っていれば、各1回使用として移行する
+				const legacy = JSON.parse(
+					localStorage.getItem(LEGACY_KEY) || '[]',
+				);
+				if (Array.isArray(legacy)) {
+					legacy.forEach((e) => {
+						if (typeof e === 'string') counts.set(e, 1);
+					});
+					if (counts.size) save();
+				}
+			}
+		} catch (_) {}
+
+		function save() {
+			try {
+				const obj = {};
+				for (const [k, v] of counts) obj[k] = v;
+				localStorage.setItem(KEY, JSON.stringify(obj));
+			} catch (_) {}
+		}
+		// 使用回数を+1し、表示中の全メッセージのショートカット行を即座に更新する
+		function touch(emoji) {
+			counts.set(emoji, (counts.get(emoji) || 0) + 1);
+			save();
+			refreshAllRecentReactionBars();
+		}
+		// 使用回数が多い順に最大MAX件返す（同数の場合はMapの挿入順＝先に使われた方を優先）
+		function get() {
+			return Array.from(counts.entries())
+				.sort((a, b) => b[1] - a[1])
+				.slice(0, MAX)
+				.map(([emoji]) => emoji);
+		}
+		return { touch, get };
+	})();
+
+	function isValidReactionEmoji(emoji) {
+		if (typeof emoji !== 'string' || !emoji) return false;
+		if (emoji.length > 32) return false;
+		if (emoji.startsWith('nyax:')) {
+			const id = emoji.slice(5);
+			return /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(id);
+		}
+		// 国旗（地域指示記号のペア、例: 🇯🇵）
+		if (/^\p{Regional_Indicator}{2}$/u.test(emoji)) return true;
+		// キーキャップ（例: 1️⃣, #️⃣, *️⃣）
+		if (/^[0-9#*]\uFE0F?\u20E3$/u.test(emoji)) return true;
+		// 通常の絵文字・ZWJシーケンス・肌の色修飾子・異体字セレクタを含む1〜複数コードポイントの並び
+		return /^[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D\p{Mn}]{1,16}$/u.test(
+			emoji,
+		);
+	}
+
+	// メッセージオブジェクトの reactions を更新する（emoji -> Set(uid)）
+	// 戻り値: 実際に状態が変化したか
+	function applyReactionToMessage(m, uid, emoji, active) {
+		if (!m.reactions) m.reactions = {};
+		const set =
+			m.reactions[emoji] instanceof Set
+				? m.reactions[emoji]
+				: new Set(m.reactions[emoji] || []);
+		const had = set.has(uid);
+		if (active === had) {
+			m.reactions[emoji] = set;
+			return false;
+		}
+		if (active) set.add(uid);
+		else set.delete(uid);
+		if (set.size === 0) delete m.reactions[emoji];
+		else m.reactions[emoji] = set;
+		return true;
+	}
+
+	// 自分のリアクションをトグルし、署名して配布する
+	async function sendReaction(id, emoji) {
+		const m = App.messages.get(id);
+		if (!m || m.deleted) return;
+		if (!isValidReactionEmoji(emoji)) return;
+		const set = m.reactions && m.reactions[emoji];
+		const currentlyActive = !!(set && set.has(Identity.id));
+		const nextActive = !currentlyActive;
+
+		applyReactionToMessage(m, Identity.id, emoji, nextActive);
+		persistIfNeeded();
+		updateReactionsEl(m);
+		if (nextActive) RecentReactions.touch(emoji);
+
+		const ts = Date.now();
+		const signable = {
+			k: 'reaction',
+			id,
+			uid: Identity.id,
+			roomId: App.roomId,
+			emoji,
+			active: nextActive,
+			ts,
+		};
+		const sig = await signPayload(signable);
+		distribute({
+			k: 'reaction',
+			id,
+			uid: Identity.id,
+			roomId: App.roomId,
+			emoji,
+			active: nextActive,
+			ts,
+			pub: Identity.pubJwk,
+			sig,
+		});
+	}
+
+	// reactions オブジェクト（emoji -> Set(uid)）を Discord風の絵文字トークンに変換して1つのimg/spanを生成
+	function buildReactionContentEl(emoji) {
+		if (emoji.startsWith('nyax:')) {
+			const id = emoji.slice(5);
+			const img = document.createElement('img');
+			img.src = NyaXEmoji.imgUrl(id);
+			img.alt = '_' + id + '_';
+			img.className = 'nyaxEmoji reactionEmojiImg';
+			return img;
+		}
+		const span = document.createElement('span');
+		span.className = 'reactionEmojiUnicode';
+		span.textContent = emoji;
+		return span;
+	}
+
+	// 指定メッセージ要素の下にリアクションのピル一覧を描画（0件なら要素ごと削除）
+	function updateReactionsEl(m) {
+		const msgEl = document.getElementById('m_' + m.id);
+		if (!msgEl) return;
+		const content = msgEl.querySelector('.msgContent');
+		if (!content) return;
+		let row = content.querySelector('.reactions');
+
+		const entries = Object.entries(m.reactions || {}).filter(
+			([, set]) =>
+				set && (set instanceof Set ? set.size : set.length) > 0,
+		);
+		if (!entries.length) {
+			if (row) row.remove();
+			return;
+		}
+		if (!row) {
+			row = document.createElement('div');
+			row.className = 'reactions';
+			// compact表示時は compactBodyRow の外側（メッセージ全体の下）に追加
+			content.appendChild(row);
+		}
+		row.innerHTML = '';
+		// 付与順を安定させるため絵文字キーでソート
+		entries.sort((a, b) => (a[0] > b[0] ? 1 : -1));
+		for (const [emoji, setLike] of entries) {
+			const set = setLike instanceof Set ? setLike : new Set(setLike);
+			const pill = document.createElement('button');
+			const mine = set.has(Identity.id);
+			pill.className = 'reactionPill' + (mine ? ' mine' : '');
+			pill.appendChild(buildReactionContentEl(emoji));
+			const count = document.createElement('span');
+			count.className = 'reactionCount';
+			count.textContent = String(set.size);
+			pill.appendChild(count);
+			// ホバー時に誰がリアクションしたか表示
+			const names = Array.from(set)
+				.map((uid) => {
+					if (uid === Identity.id) return Profile.name || '自分';
+					const u =
+						UserStore.get(uid) ||
+						App.users.get(uid) ||
+						App.allMembers.get(uid);
+					return (u && getDisplayName(u)) || '名前なし';
+				})
+				.join('、');
+			pill.title = names;
+			pill.onclick = (e) => {
+				e.stopPropagation();
+				sendReaction(m.id, emoji);
+			};
+			row.appendChild(pill);
+		}
+	}
+
+	/* ===================== EmojiMart ポップオーバー ===================== */
+	// NyaXEmojiカスタムカテゴリのアイコン（EmojiMartのカテゴリタブに使用）
+	const NYAX_CATEGORY_ICON_URL = './emoji/nyax.svg';
+
+	const EmojiMartUI = (() => {
+		let popoverEl = null;
+		let pickerEl = null;
+		let closeHandler = null;
+
+		function close() {
+			if (popoverEl) {
+				popoverEl.remove();
+				popoverEl = null;
+				pickerEl = null;
+			}
+			if (closeHandler) {
+				document.removeEventListener('mousedown', closeHandler, true);
+				document.removeEventListener('touchstart', closeHandler, true);
+				closeHandler = null;
+			}
+		}
+
+		// NyaXEmoji一覧からEmojiMart custom category定義を組み立てる
+		function buildNyaxCustomCategory() {
+			const ids = NyaXEmoji.list();
+			if (!ids.length) return [];
+			return [
+				{
+					id: 'nyax',
+					name: 'NyaXEmoji',
+					emojis: ids.map((id) => ({
+						id: 'nyax_' + id,
+						name: id,
+						keywords: [id],
+						skins: [{ src: NyaXEmoji.imgUrl(id) }],
+					})),
+				},
+			];
+		}
+
+		// emoji-martが選択結果として返すemojiオブジェクトから、
+		// アプリ内で使うemojiキー（Unicode文字 or "nyax:id"）を取り出す
+		function resolveEmojiKey(emoji) {
+			if (
+				emoji &&
+				typeof emoji.id === 'string' &&
+				emoji.id.startsWith('nyax_')
+			) {
+				return 'nyax:' + emoji.id.slice(5);
+			}
+			if (emoji && typeof emoji.native === 'string') return emoji.native;
+			// 稀にnativeが無いケース（一部のカスタムセット）向けフォールバック
+			if (emoji && typeof emoji.unified === 'string') {
+				try {
+					return String.fromCodePoint(
+						...emoji.unified.split('-').map((h) => parseInt(h, 16)),
+					);
+				} catch (_) {
+					return null;
+				}
+			}
+			return null;
+		}
+
+		// triggerEl の近くに EmojiMart ピッカーを開く
+		// onSelect(emojiKey) が選択時に呼ばれる
+		function open(triggerEl, onSelect) {
+			if (popoverEl) {
+				close();
+				return;
+			}
+			if (typeof EmojiMart === 'undefined') {
+				console.warn('EmojiMartが読み込まれていません');
+				return;
+			}
+
+			const popover = document.createElement('div');
+			popover.className = 'emojiMartPopover';
+
+			const picker = new EmojiMart.Picker({
+				data: async () => {
+					const res = await fetch(
+						'https://cdn.jsdelivr.net/npm/@emoji-mart/data',
+					);
+					return res.json();
+				},
+				custom: buildNyaxCustomCategory(),
+				categoryIcons: {
+					nyax: {
+						src: NYAX_CATEGORY_ICON_URL,
+					},
+				},
+				theme: 'light',
+				locale: 'ja',
+				previewEmoji: 'none',
+				skinTonePosition: 'search',
+				maxFrequentRows: 2,
+				onEmojiSelect: (emoji) => {
+					const key = resolveEmojiKey(emoji);
+					if (key) onSelect(key);
+				},
+			});
+
+			popover.appendChild(picker);
+			document.body.appendChild(popover);
+			popoverEl = popover;
+			pickerEl = picker;
+
+			// トリガー要素の近くに配置（画面端でクリップしないよう調整）
+			const place = () => {
+				const rect = triggerEl.getBoundingClientRect();
+				const pw = popover.offsetWidth || 340;
+				const ph = popover.offsetHeight || 420;
+				let left = rect.left;
+				if (left + pw > window.innerWidth - 8)
+					left = window.innerWidth - pw - 8;
+				if (left < 8) left = 8;
+				let top = rect.bottom + 6;
+				if (top + ph > window.innerHeight - 8) {
+					top = rect.top - ph - 6;
+				}
+				if (top < 8) top = 8;
+				popover.style.left = left + 'px';
+				popover.style.top = top + 'px';
+			};
+			// em-emoji-pickerはカスタム要素のためサイズ確定後に再配置する
+			requestAnimationFrame(place);
+			setTimeout(place, 60);
+
+			closeHandler = (e) => {
+				if (
+					popoverEl &&
+					!popoverEl.contains(e.target) &&
+					e.target !== triggerEl
+				) {
+					close();
+				}
+			};
+			setTimeout(() => {
+				document.addEventListener('mousedown', closeHandler, true);
+				document.addEventListener('touchstart', closeHandler, true);
+			}, 0);
+		}
+
+		return { open, close };
+	})();
+
+	// メッセージのリアクションピッカーを開く
+	function openReactionPicker(m, triggerEl) {
+		EmojiMartUI.open(triggerEl, (emojiKey) => {
+			sendReaction(m.id, emojiKey);
+			EmojiMartUI.close();
+		});
+	}
+
+	function closeReactionPicker() {
+		EmojiMartUI.close();
+	}
+
+	// よく使うリアクションのショートカットボタン群（.msgActionRecent の中身）を1件分構築する
+	function buildRecentReactionWrap(messageId) {
+		const recent = RecentReactions.get();
+		if (!recent.length) return null;
+		const recentWrap = document.createElement('div');
+		recentWrap.className = 'msgActionRecent';
+		for (const emoji of recent) {
+			const rBtn = document.createElement('button');
+			rBtn.className = 'msgActionRecentBtn';
+			rBtn.title = emoji.startsWith('nyax:')
+				? '_' + emoji.slice(5) + '_'
+				: emoji;
+			rBtn.appendChild(buildReactionContentEl(emoji));
+			rBtn.onclick = (e) => {
+				e.stopPropagation();
+				sendReaction(messageId, emoji);
+			};
+			recentWrap.appendChild(rBtn);
+		}
+		return recentWrap;
+	}
+
+	// リアクションが送信されるたびに呼ばれる：画面上に表示中の全メッセージの
+	// 「よく使うリアクション」ショートカット行を、最新の使用回数順に一括で更新する。
+	// （使用履歴はグローバルな集計のため、対象メッセージだけでなく全メッセージ分を更新する必要がある）
+	function refreshAllRecentReactionBars() {
+		const bars = document.querySelectorAll('.msgActionBar[data-mid]');
+		bars.forEach((actionBar) => {
+			const mid = actionBar.getAttribute('data-mid');
+			const oldWrap = actionBar.querySelector('.msgActionRecent');
+			const newWrap = buildRecentReactionWrap(mid);
+			if (oldWrap && newWrap) {
+				oldWrap.replaceWith(newWrap);
+			} else if (oldWrap && !newWrap) {
+				oldWrap.remove();
+			} else if (!oldWrap && newWrap) {
+				actionBar.insertBefore(newWrap, actionBar.firstChild);
+			}
 		});
 	}
 
@@ -4453,7 +5106,10 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (!trimmed) return;
 		const targetRoom = room || App.roomId;
 		if (!targetRoom) return;
-		const roomName = App.roomOption && App.roomOption.name ? App.roomOption.name : targetRoom;
+		const roomName =
+			App.roomOption && App.roomOption.name
+				? App.roomOption.name
+				: targetRoom;
 		if (App.roomId && App.roomId !== targetRoom) {
 			openRoom(targetRoom, roomName, true, false);
 		}
@@ -4464,15 +5120,24 @@ window.addEventListener('DOMContentLoaded', () => {
 			roomId: targetRoom,
 			text: trimmed,
 			ts: Date.now(),
-			replyTo: sender ? { id: `reply-${sender}`, uid: sender, name: sender, text: trimmed } : null,
+			replyTo: sender
+				? {
+						id: `reply-${sender}`,
+						uid: sender,
+						name: sender,
+						text: trimmed,
+					}
+				: null,
 		});
 	}
 
 	function dispatchNotificationReply(replyText, sender, room) {
 		try {
-			window.dispatchEvent(new CustomEvent('ncweb:notification-reply', {
-				detail: { replyText, sender, room },
-			}));
+			window.dispatchEvent(
+				new CustomEvent('ncweb:notification-reply', {
+					detail: { replyText, sender, room },
+				}),
+			);
 		} catch (e) {}
 	}
 
@@ -4487,23 +5152,30 @@ window.addEventListener('DOMContentLoaded', () => {
 			// 最大 1.5 秒・3 回まで再試行してから拒否する
 			function tryAnswer() {
 				if (!remoteUid || !App.connected) {
-					try { call.close(); } catch (e) {}
+					try {
+						call.close();
+					} catch (e) {}
 					return;
 				}
 				if (!App.users.has(remoteUid)) {
-					const retries = (call._answerRetries = (call._answerRetries || 0) + 1);
+					const retries = (call._answerRetries =
+						(call._answerRetries || 0) + 1);
 					if (retries <= 3) {
 						setTimeout(tryAnswer, 500);
 						return;
 					}
 					// 安全性の強化：室内の正式な参加者リスト（App.users）にいないPeerからの着信を拒否
-					try { call.close(); } catch (e) {}
+					try {
+						call.close();
+					} catch (e) {}
 					return;
 				}
 				if (isScreen) {
 					// 画面共有の着信：ボイスチャット参加中のみ受け入れる
 					if (!App.localStream) {
-						try { call.close(); } catch (e) {}
+						try {
+							call.close();
+						} catch (e) {}
 						return;
 					}
 					call.answer();
@@ -4511,7 +5183,9 @@ window.addEventListener('DOMContentLoaded', () => {
 				} else {
 					// ボイスの着信：localStream があれば送信付きで応答
 					if (!App.localStream) {
-						try { call.close(); } catch (e) {}
+						try {
+							call.close();
+						} catch (e) {}
 						return;
 					}
 					call.answer(App.localStream);
@@ -4585,7 +5259,8 @@ window.addEventListener('DOMContentLoaded', () => {
 	}
 	function bindCall(call, overrideRemoteUid) {
 		// 発信側は metadata.uid が自分自身のため、相手のUIDを上書き引数で受け取る
-		const remote = overrideRemoteUid || (call.metadata && call.metadata.uid);
+		const remote =
+			overrideRemoteUid || (call.metadata && call.metadata.uid);
 		// 安全性の強化：接続中のアクティブな室内にいないPeerからのメディアストリームの関連付けを無視
 		if (!remote || !App.users.has(remote)) {
 			try {
@@ -4617,12 +5292,16 @@ window.addEventListener('DOMContentLoaded', () => {
 			// 正しく再接続できない場合があるため、常に新しい要素を生成する
 			const old = App.mediaEls.get(remote);
 			if (old) {
-				try { old.srcObject = null; } catch (e) {}
+				try {
+					old.srcObject = null;
+				} catch (e) {}
 				old.remove();
 			}
 			// 旧 Web Audio コンテキストが残っていれば閉じる
 			if (App._audioProcessors && App._audioProcessors.has(remote)) {
-				try { App._audioProcessors.get(remote).ctx.close(); } catch (e) {}
+				try {
+					App._audioProcessors.get(remote).ctx.close();
+				} catch (e) {}
 				App._audioProcessors.delete(remote);
 			}
 
@@ -4683,13 +5362,16 @@ window.addEventListener('DOMContentLoaded', () => {
 			if (el) {
 				if (el.srcObject !== stream) {
 					el.srcObject = stream;
-					el.play().catch((e) => console.warn('Screen play failed', e));
+					el.play().catch((e) =>
+						console.warn('Screen play failed', e),
+					);
 				}
 			} else {
 				el = document.createElement('video');
 				el.autoplay = true;
 				el.playsInline = true;
-				const pool = document.getElementById('mediaPool') || document.body;
+				const pool =
+					document.getElementById('mediaPool') || document.body;
 				pool.appendChild(el);
 				App.screenMediaEls.set(remote, el);
 				el.srcObject = stream;
@@ -4822,7 +5504,9 @@ window.addEventListener('DOMContentLoaded', () => {
 		const useCam = !!opts.video;
 		const audioConstraint = useMic
 			? {
-					deviceId: opts.audioDeviceId ? { exact: opts.audioDeviceId } : undefined,
+					deviceId: opts.audioDeviceId
+						? { exact: opts.audioDeviceId }
+						: undefined,
 					echoCancellation: true,
 					noiseSuppression: true,
 					autoGainControl: true,
@@ -5033,7 +5717,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			if (s) pref = JSON.parse(s);
 		} catch (e) {}
 		doJoinVoiceChatWithDevices({
-			audio: pref.mic !== false,   // 未保存時はマイク有効をデフォルトとする
+			audio: pref.mic !== false, // 未保存時はマイク有効をデフォルトとする
 			video: !!pref.cam,
 			audioDeviceId: pref.audioDeviceId || undefined,
 			videoDeviceId: pref.videoDeviceId || undefined,
@@ -5092,7 +5776,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 		sr.onerror = (e) => {
 			App._sr = null;
-			if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+			if (
+				e.error === 'not-allowed' ||
+				e.error === 'service-not-allowed'
+			) {
 				// 権限エラー: マイク許可が得られていない。再起動しても無意味なので
 				// onend でも再起動しないよう禁止フラグを立てる
 				_srNoRestart = true;
@@ -5109,7 +5796,8 @@ window.addEventListener('DOMContentLoaded', () => {
 			if (App.localStream && App.captionsOn) {
 				App._srRestartTimer = setTimeout(() => {
 					App._srRestartTimer = null;
-					if (App.localStream && App.captionsOn) startSpeechRecognition();
+					if (App.localStream && App.captionsOn)
+						startSpeechRecognition();
 				}, 1500);
 			}
 		};
@@ -5125,7 +5813,8 @@ window.addEventListener('DOMContentLoaded', () => {
 			if (App.localStream && App.captionsOn) {
 				App._srRestartTimer = setTimeout(() => {
 					App._srRestartTimer = null;
-					if (App.localStream && App.captionsOn) startSpeechRecognition();
+					if (App.localStream && App.captionsOn)
+						startSpeechRecognition();
 				}, 300);
 			}
 		};
@@ -5143,7 +5832,9 @@ window.addEventListener('DOMContentLoaded', () => {
 			App._srRestartTimer = null;
 		}
 		if (App._sr) {
-			try { App._sr.abort(); } catch (e) {}
+			try {
+				App._sr.abort();
+			} catch (e) {}
 			App._sr = null;
 		}
 	}
@@ -5159,7 +5850,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	function buildCaptionText(realUid) {
 		const cap = App.captions.get(realUid);
 		if (cap) {
-			const isStale = (Date.now() - cap.ts) > APP_CAPTION_TTL_MS;
+			const isStale = Date.now() - cap.ts > APP_CAPTION_TTL_MS;
 			const isTyping = App._captionTyping.has(realUid) && !isStale;
 			return {
 				text: cap.text + (isTyping ? captionDotStr() : ''),
@@ -5181,12 +5872,14 @@ window.addEventListener('DOMContentLoaded', () => {
 		// 画面共有中の video 要素ごと再構築する renderVoiceScreen() は重く、
 		// 共有画面視聴側でちらつきの原因になるため、ここでは既存の
 		// .pCaption 要素のテキストだけをピンポイントで差分更新する。
-		document.querySelectorAll('.pCaption[data-caption-uid]').forEach((el) => {
-			const realUid = el.dataset.captionUid;
-			const { text, stale } = buildCaptionText(realUid);
-			el.textContent = text;
-			el.style.opacity = stale ? '0.4' : '';
-		});
+		document
+			.querySelectorAll('.pCaption[data-caption-uid]')
+			.forEach((el) => {
+				const realUid = el.dataset.captionUid;
+				const { text, stale } = buildCaptionText(realUid);
+				el.textContent = text;
+				el.style.opacity = stale ? '0.4' : '';
+			});
 	}
 
 	function startCaptionDotTimer() {
@@ -5204,7 +5897,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
 	// 現在のフェーズに対応するドット文字列を返す（副作用なし）
 	function captionDotStr() {
-		return _captionDotPhase === 0 ? '.' : _captionDotPhase === 1 ? '..' : '...';
+		return _captionDotPhase === 0
+			? '.'
+			: _captionDotPhase === 1
+				? '..'
+				: '...';
 	}
 
 	function leaveVoiceChat() {
@@ -5218,13 +5915,17 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (App._bufWarnCooldown) App._bufWarnCooldown = 0;
 		if (App._bufferWarned) App._bufferWarned = false;
 		if (App._dummyAudioContext) {
-			try { App._dummyAudioContext.close(); } catch (e) {}
+			try {
+				App._dummyAudioContext.close();
+			} catch (e) {}
 			App._dummyAudioContext = null;
 		}
 		// 受信音声の Web Audio API 処理コンテキストをすべてクリーンアップ
 		if (App._audioProcessors) {
 			App._audioProcessors.forEach((proc) => {
-				try { proc.ctx.close(); } catch (e) {}
+				try {
+					proc.ctx.close();
+				} catch (e) {}
 			});
 			App._audioProcessors.clear();
 		}
@@ -5280,7 +5981,9 @@ window.addEventListener('DOMContentLoaded', () => {
 		App.speakingState.clear();
 		App.speakingMonitors.forEach((mon) => {
 			if (mon.timer) clearInterval(mon.timer);
-			try { mon.ctx && mon.ctx.close && mon.ctx.close(); } catch (e) {}
+			try {
+				mon.ctx && mon.ctx.close && mon.ctx.close();
+			} catch (e) {}
 		});
 		App.speakingMonitors.clear();
 
@@ -5294,7 +5997,9 @@ window.addEventListener('DOMContentLoaded', () => {
 		featuredUid = null;
 		// B4 fix: VC 離脱時に進行中の TTS 読み上げをキャンセルする
 		if (typeof speechSynthesis !== 'undefined' && speechSynthesis.cancel) {
-			try { speechSynthesis.cancel(); } catch (e) {}
+			try {
+				speechSynthesis.cancel();
+			} catch (e) {}
 		}
 
 		setOwnVoiceOption({ inVoice: false, cameraOn: false });
@@ -5346,7 +6051,9 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (document.visibilityState === 'visible') {
 			if (App.connected) {
 				resetHostTimeout();
-				App.clientTimers.forEach((_, peerId) => resetClientHeartbeatTimer(peerId));
+				App.clientTimers.forEach((_, peerId) =>
+					resetClientHeartbeatTimer(peerId),
+				);
 			}
 			if (App.localStream) {
 				await requestWakeLock();
@@ -5732,7 +6439,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 	function renderHeader() {
 		let displayName = App.roomOption.name;
-		if (!App.connected && (!displayName || displayName === '無題のスペース')) {
+		if (
+			!App.connected &&
+			(!displayName || displayName === '無題のスペース')
+		) {
 			displayName = 'Connecting...';
 		}
 		document.getElementById('headerName').textContent =
@@ -5913,7 +6623,8 @@ window.addEventListener('DOMContentLoaded', () => {
 		const deleteBtn = document.getElementById('umDelete');
 		if (deleteBtn) {
 			deleteBtn.onclick = async () => {
-				if (!await showConfirm('このユーザーの情報を削除しますか?')) return;
+				if (!(await showConfirm('このユーザーの情報を削除しますか?')))
+					return;
 				if (App.userNicknames.has(uid)) App.userNicknames.delete(uid);
 				if (App.mutedUsers.has(uid)) App.mutedUsers.delete(uid);
 				if (UserStore.data.has(uid)) {
@@ -6122,7 +6833,8 @@ window.addEventListener('DOMContentLoaded', () => {
 					videoStillActive =
 						fsUid === Identity.id
 							? App.cameraOn
-							: !!voiceUsers.find((u) => u.uid === fsUid)?.cameraOn;
+							: !!voiceUsers.find((u) => u.uid === fsUid)
+									?.cameraOn;
 				}
 			}
 			if (!userStillExists || !videoStillActive) {
@@ -6206,9 +6918,9 @@ window.addEventListener('DOMContentLoaded', () => {
 			// 画面共有: ストリームが存在するだけで映像あり扱い。
 			// readyState が一時的に 'live' 以外になっても黒画面にしない。
 			const fHasVideo = isScreen
-				? (realUid === Identity.id
+				? realUid === Identity.id
 					? !!App.screenStream
-					: !!(App.screenMediaEls.get(realUid)?.srcObject))
+					: !!App.screenMediaEls.get(realUid)?.srcObject
 				: realUid === Identity.id
 					? App.cameraOn
 					: !!fu.cameraOn;
@@ -6310,9 +7022,9 @@ window.addEventListener('DOMContentLoaded', () => {
 			// 画面共有: ストリームが存在するだけで映像あり扱い。
 			// readyState が一時的に 'live' 以外になっても黒画面にしない。
 			const pvHasVideo = isScreen
-				? (realUid === Identity.id
+				? realUid === Identity.id
 					? !!App.screenStream
-					: !!(App.screenMediaEls.get(realUid)?.srcObject))
+					: !!App.screenMediaEls.get(realUid)?.srcObject
 				: realUid === Identity.id
 					? App.cameraOn
 					: !!u.cameraOn;
@@ -6598,7 +7310,12 @@ window.addEventListener('DOMContentLoaded', () => {
 			return './emoji/' + encodeURIComponent(id) + '.svg';
 		}
 
-		return { init, getRegExp, has, imgUrl, onReady };
+		// ピッカー表示用にid一覧を配列で取得（未取得時は空配列）
+		function list() {
+			return idSet ? Array.from(idSet).sort() : [];
+		}
+
+		return { init, getRegExp, has, imgUrl, onReady, list };
 	})();
 
 	// emoji一覧のfetch完了後に既存メッセージのbodyを再描画する
@@ -6906,59 +7623,138 @@ window.addEventListener('DOMContentLoaded', () => {
 			content.appendChild(body);
 		}
 
-		// 返信ボタン：削除されていないメッセージに表示
+		// リアクション表示行（本文の下）
 		if (!m.deleted) {
-			const replyBtn = document.createElement('button');
-			replyBtn.className = 'replyBtn';
-			replyBtn.textContent = '返信';
-			replyBtn.onclick = () => startReply(m);
-			meta.appendChild(replyBtn);
+			const reactions = document.createElement('div');
+			reactions.className = 'reactions';
+			content.appendChild(reactions);
 		}
 
-		// 削除ボタン：送信者本人のメッセージにのみ表示（テキスト・ファイル両方）
-		if (!m.deleted && m.uid === Identity.id) {
-			const del = document.createElement('button');
-			del.className = 'delBtn';
-			del.textContent = '削除';
-			del.onclick = async () => {
-				if (!await showConfirm('このメッセージを削除しますか？')) return;
-				sendDeleteFor(m.id);
+		// Discord風ホバーアクションバー（アイコンボタン、左寄せ）：削除されていないメッセージに表示
+		if (!m.deleted) {
+			const actionBar = document.createElement('div');
+			actionBar.className = 'msgActionBar';
+			actionBar.setAttribute('data-mid', m.id);
+
+			// よく使う（最も使用回数が多い）上位5件のリアクションをワンタップで押せるショートカット
+			// （アクションバーの左端に配置）
+			const recentWrap = buildRecentReactionWrap(m.id);
+			if (recentWrap) {
+				actionBar.appendChild(recentWrap);
+			}
+
+			const reactBtn = document.createElement('button');
+			reactBtn.className = 'msgActionBtn';
+			reactBtn.title = 'リアクション';
+			reactBtn.innerHTML =
+				'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>';
+			reactBtn.onclick = (e) => {
+				e.stopPropagation();
+				openReactionPicker(m, reactBtn);
 			};
-			meta.appendChild(del);
+			actionBar.appendChild(reactBtn);
+
+			const replyBtn = document.createElement('button');
+			replyBtn.className = 'msgActionBtn replyBtn';
+			replyBtn.title = '返信';
+			replyBtn.innerHTML =
+				'<svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M4 12h11a5 5 0 0 1 5 5v2"/></svg>';
+			replyBtn.onclick = (e) => {
+				e.stopPropagation();
+				startReply(m);
+			};
+			actionBar.appendChild(replyBtn);
+
+			// 削除ボタン：送信者本人のメッセージにのみ表示（テキスト・ファイル両方）
+			if (m.uid === Identity.id) {
+				const del = document.createElement('button');
+				del.className = 'msgActionBtn delBtn danger';
+				del.title = '削除';
+				del.innerHTML =
+					'<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+				del.onclick = async (e) => {
+					e.stopPropagation();
+					if (!(await showConfirm('このメッセージを削除しますか？')))
+						return;
+					sendDeleteFor(m.id);
+				};
+				actionBar.appendChild(del);
+			}
+
+			div.appendChild(actionBar);
 		}
 
-		// コンパクット時: ボタンをメッセージ本文の真右に配置する専用コンテナ
+		// コンパクット時: bodyを専用ラッパーに入れる（アクションバーは絶対配置のため独立）
 		if (isCompactMsg && !m.deleted) {
-			const actions = document.createElement('div');
-			actions.className = 'compactActions';
-			// meta内のボタンをこちらに移動
-			content.querySelectorAll('.replyBtn, .delBtn').forEach((btn) => {
-				actions.appendChild(btn);
-			});
-			// bodyとactionsを横並びにするラッパー
 			const bodyRow = document.createElement('div');
 			bodyRow.className = 'compactBodyRow';
 			const existingBody = content.querySelector('.body');
 			content.insertBefore(bodyRow, existingBody);
 			bodyRow.appendChild(existingBody);
-			bodyRow.appendChild(actions);
 		}
 
 		// ダブルクリックでも返信開始
 		if (!m.deleted) {
 			div.ondblclick = () => startReply(m);
+			// タッチ端末は:hoverが働かないため、メッセージタップでアクションバーの表示をトグルする
+			// （ボタン・リンク等のタップはここでは処理しない）
+			div.addEventListener('click', (e) => {
+				if (!isMobile) return;
+				if (e.target.closest('button, a, .msgActionBar')) return;
+				toggleMsgActionBar(div);
+			});
 		}
 
 		div.appendChild(content);
 		log.appendChild(div);
+
+		if (!m.deleted && m.reactions) {
+			updateReactionsEl(m);
+		}
 	}
+	// タッチ端末向け：メッセージタップでアクションバーの表示/非表示を切り替える
+	// （ホバーできる環境と見た目の挙動を揃えるための代替手段）
+	function toggleMsgActionBar(msgDiv) {
+		const bar = msgDiv.querySelector('.msgActionBar');
+		if (!bar) return;
+		const willShow = !bar.classList.contains('forceVisible');
+		closeAllMsgActionBars();
+		if (willShow) {
+			bar.classList.add('forceVisible');
+			setTimeout(() => {
+				document.addEventListener(
+					'click',
+					onDocClickCloseActionBars,
+					true,
+				);
+			}, 0);
+		}
+	}
+	function closeAllMsgActionBars() {
+		document
+			.querySelectorAll('.msgActionBar.forceVisible')
+			.forEach((el) => el.classList.remove('forceVisible'));
+	}
+	function onDocClickCloseActionBars(e) {
+		if (!e.target.closest('.msg')) {
+			closeAllMsgActionBars();
+			document.removeEventListener(
+				'click',
+				onDocClickCloseActionBars,
+				true,
+			);
+		}
+	}
+
 	function markElDeleted(el) {
 		el.classList.add('deleted');
 		el.classList.remove('compact'); // 削除済みは名前・アバターを表示する
 		const body = el.querySelector('.body');
 		if (body) body.textContent = 'メッセージは削除されました';
-		const del = el.querySelector('.delBtn');
-		if (del) del.remove();
+		const actionBar = el.querySelector('.msgActionBar');
+		if (actionBar) actionBar.remove();
+		const reactions = el.querySelector('.reactions');
+		if (reactions) reactions.remove();
 	}
 	function renderFileBody(body, m) {
 		const f = m.file;
@@ -7415,7 +8211,11 @@ window.addEventListener('DOMContentLoaded', () => {
 			if (isMobile || isCompactPC()) setSidebarOpen(false);
 			return;
 		}
-		if (App.roomId && App.roomId !== roomId) resetConnectionState(/* keepUsers */ false, /* skipVoiceRestore */ true);
+		if (App.roomId && App.roomId !== roomId)
+			resetConnectionState(
+				/* keepUsers */ false,
+				/* skipVoiceRestore */ true,
+			);
 
 		App.roomId = roomId;
 		App.requireExistingHost = !!requireHost;
@@ -7588,7 +8388,9 @@ window.addEventListener('DOMContentLoaded', () => {
 			if (stage) stage.innerHTML = '';
 		}
 		if (!fromHistory && !noHistoryBack) {
-			const idx = backStack.findIndex((item) => item.type === 'modal' && item.id === id);
+			const idx = backStack.findIndex(
+				(item) => item.type === 'modal' && item.id === id,
+			);
 			if (idx !== -1) {
 				backStack.splice(idx, 1);
 				isInternalBack = true;
@@ -7662,10 +8464,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 	async function resetEverything() {
 		if (
-			!await showConfirm(
+			!(await showConfirm(
 				'全てのルームから退出し、ユーザー情報がリセットされます。',
 				'本当にリセットしますか？',
-			)
+			))
 		)
 			return;
 		Object.keys(localStorage)
@@ -7793,7 +8595,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			.catch(() => toast(v));
 	};
 	document.getElementById('rsLeave').onclick = async () => {
-		if (!await showConfirm('このスペースから退出しますか？')) return;
+		if (!(await showConfirm('このスペースから退出しますか？'))) return;
 		const roomIdToLeave = App.roomId;
 		leaveCurrentRoom();
 		// ルーム退出時にルーム一覧から該当IDを削除
@@ -7848,7 +8650,9 @@ window.addEventListener('DOMContentLoaded', () => {
 			toast('表示名を入力してください');
 			return;
 		}
-		const isFirstSetup = document.getElementById('ovProfile').classList.contains('firstSetup');
+		const isFirstSetup = document
+			.getElementById('ovProfile')
+			.classList.contains('firstSetup');
 		Profile.name = name;
 		saveProfile();
 		renderSidebarFooter();
@@ -7894,7 +8698,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	});
 	msgInput.addEventListener('input', () => {
 		msgInput.style.height = 'auto';
-		msgInput.style.height = Math.min(120, msgInput.scrollHeight) + 'px';
+		msgInput.style.height = Math.min(120, msgInput.scrollHeight - 1) + 'px';
 		if (msgInput.value.trim()) {
 			TypingState.startTyping();
 			App._captionTyping.set(Identity.id, true);
@@ -7924,6 +8728,29 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (f) sendFile(f);
 		e.target.value = '';
 	});
+
+	// 絵文字ボタン：EmojiMartを開き、選択した絵文字/NyaXEmojiを入力欄に挿入する
+	document.getElementById('btnEmoji').onclick = (e) => {
+		e.stopPropagation();
+		const btnEmoji = document.getElementById('btnEmoji');
+		EmojiMartUI.open(btnEmoji, (emojiKey) => {
+			insertIntoComposer(emojiKey);
+		});
+	};
+	// 入力欄に絵文字を挿入する（Unicode絵文字はそのまま、NyaXEmojiは _id_ 記法で）
+	function insertIntoComposer(emojiKey) {
+		const ta = document.getElementById('msgInput');
+		const token = emojiKey.startsWith('nyax:')
+			? '_' + emojiKey.slice(5) + '_'
+			: emojiKey;
+		const start = ta.selectionStart ?? ta.value.length;
+		const end = ta.selectionEnd ?? ta.value.length;
+		ta.value = ta.value.slice(0, start) + token + ta.value.slice(end);
+		const caret = start + token.length;
+		ta.focus();
+		ta.setSelectionRange(caret, caret);
+		ta.dispatchEvent(new Event('input'));
+	}
 
 	document.getElementById('vcJoinBtn').onclick = () => {
 		if (App.localStream) return;
