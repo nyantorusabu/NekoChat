@@ -1224,8 +1224,9 @@ hr.sep {
 	margin-bottom: 8px;
 }
 
-/* 返信プレビューバー（コンポーザー上部） */
-#replyPreviewBar {
+/* 返信/編集プレビューバー（コンポーザー上部） */
+#replyPreviewBar,
+#editPreviewBar {
 	display: none;
 	align-items: center;
 	gap: 8px;
@@ -1234,10 +1235,12 @@ hr.sep {
 	background: var(--accent-weak);
 	font-size: 12px;
 }
-#replyPreviewBar.active {
+#replyPreviewBar.active,
+#editPreviewBar.active {
 	display: flex;
 }
-#replyPreviewBar .replyBarLine {
+#replyPreviewBar .replyBarLine,
+#editPreviewBar .replyBarLine {
 	border-left: 2px solid var(--accent);
 	padding-left: 7px;
 	flex: 1;
@@ -1246,18 +1249,21 @@ hr.sep {
 	flex-direction: column;
 	gap: 1px;
 }
-#replyPreviewBar .replyBarName {
+#replyPreviewBar .replyBarName,
+#editPreviewBar .replyBarName {
 	color: var(--accent);
 	font-weight: 600;
 	font-size: 11px;
 }
-#replyPreviewBar .replyBarText {
+#replyPreviewBar .replyBarText,
+#editPreviewBar .replyBarText {
 	color: var(--sub);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-#replyPreviewBar .replyBarClose {
+#replyPreviewBar .replyBarClose,
+#editPreviewBar .replyBarClose {
 	background: none;
 	border: none;
 	color: var(--sub);
@@ -1266,7 +1272,8 @@ hr.sep {
 	line-height: 1;
 	padding: 2px 4px;
 }
-#replyPreviewBar .replyBarClose:hover {
+#replyPreviewBar .replyBarClose:hover,
+#editPreviewBar .replyBarClose:hover {
 	color: var(--text);
 }
 
@@ -1896,4 +1903,52 @@ body[data-media-fullscreen='open'] {
 		bottom: auto;
 		top: 48px;
 	}
+}
+
+/* ===================== 編集関連 ===================== */
+.editBadge {
+	color: var(--sub);
+	font-size: 10.5px;
+	margin-left: 4px;
+	cursor: pointer;
+}
+.editBadge:hover {
+	color: var(--accent);
+}
+/* 編集履歴モーダル */
+#editHistoryContent {
+	max-height: 55vh;
+	overflow-y: auto;
+}
+.editHistEntry {
+	margin-bottom: 12px;
+	padding: 10px 12px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--bg);
+}
+.editHistEntry.current {
+	border-color: var(--accent);
+}
+.editHistHeader {
+	font-size: 11px;
+	color: var(--sub);
+	margin-bottom: 6px;
+}
+.editHistDiff {
+	font-size: 13px;
+	white-space: pre-wrap;
+	word-break: break-word;
+	line-height: 1.55;
+	color: var(--text);
+	padding: 6px 8px;
+	background: var(--panel);
+	border-radius: 4px;
+	border: 1px solid var(--line);
+}
+.editHistArrow {
+	text-align: center;
+	font-size: 11px;
+	color: var(--sub);
+	margin: 4px 0;
 }

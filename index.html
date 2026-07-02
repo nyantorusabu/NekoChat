@@ -311,6 +311,13 @@
 									×
 								</button>
 							</div>
+							<div id="editPreviewBar">
+								<div class="replyBarLine">
+									<span class="replyBarName" id="editBarName"></span>
+									<span class="replyBarText" id="editBarText"></span>
+								</div>
+								<button class="replyBarClose" id="editBarClose" title="編集をキャンセル">×</button>
+							</div>
 							<div id="composer">
 								<button id="btnAttach" title="ファイルを送信">
 									<svg
@@ -696,6 +703,17 @@
 						</button>
 					</div>
 					<div class="mediaStage" id="mediaFullscreenStage"></div>
+				</div>
+			</div>
+
+			<!-- 編集履歴モーダル -->
+			<div class="overlay" id="ovEditHistory">
+				<div class="modal" style="width:540px;max-height:75vh;overflow-y:auto">
+					<h2>編集履歴</h2>
+					<div id="editHistoryContent"></div>
+					<div class="actions" style="margin-top:12px">
+						<button id="editHistoryClose">閉じる</button>
+					</div>
 				</div>
 			</div>
 

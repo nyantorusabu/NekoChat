@@ -1054,6 +1054,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	}
 	function canonical(o) {
 		// 署名検証の安定化のため、キー順序をソートした正規化JSONを返す
+		if (o === undefined) return JSON.stringify(null);
 		if (o === null || typeof o !== 'object') return JSON.stringify(o);
 		if (Array.isArray(o)) return '[' + o.map(canonical).join(',') + ']';
 		const keys = Object.keys(o).sort();
@@ -1568,28 +1569,20 @@ window.addEventListener('DOMContentLoaded', () => {
 	}
 
 	const _inFlightFileSends = new Set();
-	const _chunkPrepCache = new Map(); // fileId -> Promise<Array<{buf,chunkB64,chunkHash}>>
-	async function _getPreparedChunks(fileId, blob) {
-		if (_chunkPrepCache.has(fileId)) return _chunkPrepCache.get(fileId);
-		const promise = (async () => {
-			const total = Math.ceil(blob.size / FILE_CHUNK_SIZE) || 1;
-			const chunks = new Array(total);
-			for (let seq = 0; seq < total; seq++) {
-				const slice = blob.slice(
-					seq * FILE_CHUNK_SIZE,
-					Math.min(blob.size, (seq + 1) * FILE_CHUNK_SIZE),
-				);
-				const buf = await slice.arrayBuffer();
-				const [chunkHash, chunkB64] = await Promise.all([
-					digestHex(buf),
-					Promise.resolve(b64FromBuf(buf)),
-				]);
-				chunks[seq] = { chunkHash, chunkB64 };
-			}
-			return chunks;
-		})();
-		_chunkPrepCache.set(fileId, promise);
-		return promise;
+	async function* _getPreparedChunks(blob) {
+		const total = Math.ceil(blob.size / FILE_CHUNK_SIZE) || 1;
+		for (let seq = 0; seq < total; seq++) {
+			const slice = blob.slice(
+				seq * FILE_CHUNK_SIZE,
+				Math.min(blob.size, (seq + 1) * FILE_CHUNK_SIZE),
+			);
+			const buf = await slice.arrayBuffer();
+			const [chunkHash, chunkB64] = await Promise.all([
+				digestHex(buf),
+				Promise.resolve(b64FromBuf(buf)),
+			]);
+			yield { chunkHash, chunkB64 };
+		}
 	}
 	async function startSendingFileToUid(file, targetUid, reason = 'receive') {
 		if (!file || !file.fileId || !targetUid) return;
@@ -1650,13 +1643,12 @@ window.addEventListener('DOMContentLoaded', () => {
 			state.totalBytes = totalVals.reduce((a, b) => a + b, 0);
 		};
 		updateAggregateSent();
-		const preparedChunks = await _getPreparedChunks(file.fileId, blob);
-		const total = preparedChunks.length;
 		let lastUiUpdate = 0;
 		const UI_THROTTLE_MS = 120;
-		for (let seq = 0; seq < total; seq++) {
+		const total = Math.ceil(blob.size / FILE_CHUNK_SIZE) || 1;
+		let seq = 0;
+		for await (const { chunkHash, chunkB64 } of _getPreparedChunks(blob)) {
 			if (state.status === 'rejected') break;
-			const { chunkHash, chunkB64 } = preparedChunks[seq];
 			const ts = Date.now();
 			const signable = {
 				k: 'file-chunk',
@@ -1702,6 +1694,7 @@ window.addEventListener('DOMContentLoaded', () => {
 				lastUiUpdate = now;
 				if (!updateFileMessageEl(file.fileId)) renderLog();
 			}
+			seq++;
 		}
 		const finalTs = Date.now();
 		const completeSignable = {
@@ -1740,7 +1733,6 @@ window.addEventListener('DOMContentLoaded', () => {
 				sentBytes: blob.size,
 				totalBytes: blob.size,
 			});
-			_chunkPrepCache.delete(file.fileId);
 		}
 		App.fileTransfers.set(file.fileId, state);
 		if (!updateFileMessageEl(file.fileId)) renderLog();
@@ -2391,6 +2383,7 @@ window.addEventListener('DOMContentLoaded', () => {
 				);
 			};
 			img.src = reader.result;
+			if (img.complete) img.onload();
 		};
 		reader.readAsDataURL(file);
 	}
@@ -3917,11 +3910,11 @@ window.addEventListener('DOMContentLoaded', () => {
 		}
 		if (data.t === 'relay' && App.isHost) {
 			const targetUid = data.toUid || data.to || 'all';
-			// chat/fileメッセージのrelayは、送信者が自分自身のuidを持つメッセージのみ中継する
+			// chat/file/editメッセージのrelayは、送信者が自分自身のuidを持つメッセージのみ中継する
 			// (なりすましによる他ユーザーのメッセージ偽装を防ぐ)
 			if (
 				data.payload &&
-				(data.payload.k === 'chat' || data.payload.k === 'file') &&
+				(data.payload.k === 'chat' || data.payload.k === 'file' || data.payload.k === 'edit') &&
 				data.payload.uid !== senderUid
 			) {
 				console.warn(
@@ -3970,6 +3963,15 @@ window.addEventListener('DOMContentLoaded', () => {
 					senderRelayPeerId ? [senderRelayPeerId] : [],
 				);
 			} else {
+				// ターゲット指定relayでもchat/file/editのuid偽装をチェック（防御的）
+				if (
+					data.payload &&
+					(data.payload.k === 'chat' || data.payload.k === 'file' || data.payload.k === 'edit') &&
+					data.payload.uid !== senderUid
+				) {
+					console.warn('ターゲット指定relayでuid不一致を拒否しました');
+					return;
+				}
 				if (targetUid === Identity.id) {
 					await applyAppMessage(senderUid, data.payload);
 					return;
@@ -4435,6 +4437,87 @@ window.addEventListener('DOMContentLoaded', () => {
 					App.fileTransfers.delete(m.file.fileId);
 				}
 			}
+			return;
+		}
+		if (payload.k === 'edit') {
+			const m = App.messages.get(payload.id);
+			if (!m || m.deleted) return;
+			if (payload.uid !== m.uid) {
+				console.warn('メッセージ作成者以外の編集要求を無視しました');
+				return;
+			}
+			if (!payload.pub || !payload.sig || !payload.uid || !payload.newSig) return;
+			// 編集シーケンス番号によるリプレイ対策
+			if (typeof payload.editSeq !== 'number' || payload.editSeq !== (m.editLogs ? m.editLogs.length : 0) + 1) {
+				console.warn('編集シーケンス番号が不一致のためリプレイの可能性があり拒否しました');
+				return;
+			}
+			const ok = await verifyPayload(
+				{
+					k: 'edit',
+					id: payload.id,
+					uid: payload.uid,
+					roomId: App.roomId,
+					text: payload.text,
+					editLogEntry: payload.editLogEntry,
+					editSeq: payload.editSeq,
+					ts: payload.ts,
+				},
+				payload.sig,
+				payload.pub,
+				payload.uid,
+			);
+			if (!ok) {
+				console.warn('編集要求の署名検証に失敗しました');
+				return;
+			}
+			// 編集後のメッセージ再署名を検証（履歴同期用）
+			const newSignable = {
+				k: m.k,
+				id: m.id,
+				uid: payload.uid,
+				roomId: App.roomId,
+				text: payload.text || null,
+				fileMeta: m.file
+					? {
+							name: m.file.name,
+							size: m.file.size,
+							mime: m.file.mime,
+							fileId: m.file.fileId || null,
+							hash: m.file.hash || null,
+							chunkSize: m.file.chunkSize || null,
+						}
+					: null,
+				replyTo: m.replyTo
+					? {
+							id: m.replyTo.id,
+							uid: m.replyTo.uid,
+							name: m.replyTo.name || null,
+							text: m.replyTo.text || null,
+						}
+					: null,
+				ts: m.ts,
+			};
+			const newSigOk = await verifyPayload(
+				newSignable,
+				payload.newSig,
+				payload.pub,
+				payload.uid,
+				true,
+			);
+			if (!newSigOk) {
+				console.warn('編集後のメッセージ再署名の検証に失敗しました');
+				return;
+			}
+			m.editLogs = m.editLogs || [];
+			if (payload.editLogEntry) {
+				m.editLogs.push(payload.editLogEntry);
+			}
+			m.text = payload.text;
+			m.edited = payload.ts;
+			m.sig = payload.newSig;
+			persistIfNeeded();
+			updateMessageTextInDom(payload.id, payload.text);
 			return;
 		}
 		if (payload.k === 'reaction') {
@@ -5994,6 +6077,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		App._captionTyping.clear();
 		stopSpeechRecognition();
 		stopCaptionDotTimer();
+		_captionDotPhase = 0;
 		featuredUid = null;
 		// B4 fix: VC 離脱時に進行中の TTS 読み上げをキャンセルする
 		if (typeof speechSynthesis !== 'undefined' && speechSynthesis.cancel) {
@@ -6891,9 +6975,6 @@ window.addEventListener('DOMContentLoaded', () => {
 		fv.innerHTML = '';
 		fv.classList.remove('speaking');
 		fv.onclick = null;
-		// speaking クラス差分更新のため識別子を付与
-		delete fv.dataset.uid;
-		delete fv.dataset.kind;
 		const fu =
 			displayUsers.find((u) => u.uid === featuredUid) || displayUsers[0];
 		if (fu) {
@@ -7590,6 +7671,12 @@ window.addEventListener('DOMContentLoaded', () => {
 		idSpan.textContent = '  ·  #' + (m.uid || '').slice(0, 10);
 		idSpan.title = m.uid || '';
 		meta.appendChild(idSpan);
+		if (m.edited) {
+			const editBadge = document.createElement('span');
+			editBadge.className = 'editBadge';
+			editBadge.textContent = ' (編集済み)';
+			meta.appendChild(editBadge);
+		}
 		content.appendChild(meta);
 
 		// 返信元の引用表示
@@ -7665,6 +7752,32 @@ window.addEventListener('DOMContentLoaded', () => {
 			};
 			actionBar.appendChild(replyBtn);
 
+			// 編集ボタン（ペンアイコン）：送信者本人のテキストメッセージのみ
+			if (m.uid === Identity.id && m.k !== 'file') {
+				const editBtn = document.createElement('button');
+				editBtn.className = 'msgActionBtn editBtn';
+				editBtn.title = '編集';
+				editBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+				editBtn.onclick = (e) => {
+					e.stopPropagation();
+					startEdit(m);
+				};
+				actionBar.appendChild(editBtn);
+			}
+
+			// 編集履歴ボタン（時計アイコン）：編集履歴があるメッセージに表示
+			if (m.editLogs && m.editLogs.length > 0) {
+				const histBtn = document.createElement('button');
+				histBtn.className = 'msgActionBtn historyBtn';
+				histBtn.title = '編集履歴';
+				histBtn.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+				histBtn.onclick = (e) => {
+					e.stopPropagation();
+					openEditHistory(m);
+				};
+				actionBar.appendChild(histBtn);
+			}
+
 			// 削除ボタン：送信者本人のメッセージにのみ表示（テキスト・ファイル両方）
 			if (m.uid === Identity.id) {
 				const del = document.createElement('button');
@@ -7693,9 +7806,13 @@ window.addEventListener('DOMContentLoaded', () => {
 			bodyRow.appendChild(existingBody);
 		}
 
-		// ダブルクリックでも返信開始
+		// ダブルクリック：自メッセージは編集、他人のメッセージは返信
 		if (!m.deleted) {
-			div.ondblclick = () => startReply(m);
+			if (m.uid === Identity.id && m.k !== 'file') {
+				div.ondblclick = () => startEdit(m);
+			} else {
+				div.ondblclick = () => startReply(m);
+			}
 			// タッチ端末は:hoverが働かないため、メッセージタップでアクションバーの表示をトグルする
 			// （ボタン・リンク等のタップはここでは処理しない）
 			div.addEventListener('click', (e) => {
@@ -7721,6 +7838,11 @@ window.addEventListener('DOMContentLoaded', () => {
 		closeAllMsgActionBars();
 		if (willShow) {
 			bar.classList.add('forceVisible');
+			document.removeEventListener(
+				'click',
+				onDocClickCloseActionBars,
+				true,
+			);
 			setTimeout(() => {
 				document.addEventListener(
 					'click',
@@ -7945,6 +8067,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 	function startReply(m) {
 		if (!m || m.deleted) return;
+		cancelEdit();
 		pendingReply = {
 			id: m.id,
 			uid: m.uid,
@@ -7962,6 +8085,190 @@ window.addEventListener('DOMContentLoaded', () => {
 	function cancelReply() {
 		pendingReply = null;
 		document.getElementById('replyPreviewBar').classList.remove('active');
+	}
+
+	/* ===================== edit (編集) ===================== */
+
+	let pendingEdit = null;
+
+	function startEdit(m) {
+		if (!m || m.deleted || m.uid !== Identity.id || m.k === 'file') return;
+		cancelReply();
+		pendingEdit = { id: m.id };
+		document.getElementById('editBarName').textContent = 'メッセージを編集';
+		document.getElementById('editBarText').textContent = snippetText(m);
+		const ta = document.getElementById('msgInput');
+		ta.value = m.text || '';
+		ta.style.height = '36px';
+		ta.style.height = ta.scrollHeight + 'px';
+		document.getElementById('editPreviewBar').classList.add('active');
+		ta.focus();
+	}
+
+	function cancelEdit() {
+		if (!pendingEdit) return;
+		pendingEdit = null;
+		document.getElementById('editPreviewBar').classList.remove('active');
+		const ta = document.getElementById('msgInput');
+		ta.value = '';
+		ta.style.height = '36px';
+	}
+
+	async function sendEditMessage(id, newText) {
+		const m = App.messages.get(id);
+		if (!m || m.uid !== Identity.id) return;
+		if (m.text === newText) {
+			cancelEdit();
+			return;
+		}
+		const oldText = m.text;
+		const editSeq = m.editLogs ? m.editLogs.length + 1 : 1;
+		const editLogEntry = {
+			text: oldText,
+			ts: m.edited || m.ts,
+		};
+		// 元メッセージを新しい内容で再署名（履歴同期時に署名検証を通すため）
+		const newSignable = {
+			k: m.k,
+			id: m.id,
+			uid: Identity.id,
+			roomId: App.roomId,
+			text: newText || null,
+			fileMeta: m.file
+				? {
+						name: m.file.name,
+						size: m.file.size,
+						mime: m.file.mime,
+						fileId: m.file.fileId || null,
+						hash: m.file.hash || null,
+						chunkSize: m.file.chunkSize || null,
+					}
+				: null,
+			replyTo: m.replyTo
+				? {
+						id: m.replyTo.id,
+						uid: m.replyTo.uid,
+						name: m.replyTo.name || null,
+						text: m.replyTo.text || null,
+					}
+				: null,
+			ts: m.ts,
+		};
+		const newSig = await signPayload(newSignable);
+		m.editLogs = m.editLogs || [];
+		// 編集履歴が無制限に肥大化するのを防ぐため最大50件に制限
+		if (m.editLogs.length >= 50) {
+			m.editLogs.shift();
+		}
+		m.editLogs.push(editLogEntry);
+		m.text = newText;
+		m.edited = Date.now();
+		m.sig = newSig;
+		persistIfNeeded();
+		updateMessageTextInDom(id, newText);
+
+		const ts = Date.now();
+		const editSignable = {
+			k: 'edit',
+			id: id,
+			uid: Identity.id,
+			roomId: App.roomId,
+			text: newText,
+			editLogEntry: editLogEntry,
+			editSeq: editSeq,
+			ts: ts,
+		};
+		const editSig = await signPayload(editSignable);
+		distribute({
+			k: 'edit',
+			id,
+			uid: Identity.id,
+			roomId: App.roomId,
+			text: newText,
+			ts,
+			editLogEntry,
+			editSeq,
+			newSig,
+			pub: Identity.pubJwk,
+			sig: editSig,
+		});
+		cancelEdit();
+	}
+
+	function updateMessageTextInDom(id, newText) {
+		const m = App.messages.get(id);
+		if (!m) return;
+		const el = document.getElementById('m_' + id);
+		if (!el) return;
+		const body = el.querySelector('.body');
+		if (!body) return;
+		body.innerHTML = '';
+		renderTextWithLinks(body, newText);
+		let badge = el.querySelector('.editBadge');
+		if (!badge) {
+			badge = document.createElement('span');
+			badge.className = 'editBadge';
+			badge.textContent = ' (編集済み)';
+			const meta = el.querySelector('.meta');
+			if (meta) meta.appendChild(badge);
+		}
+		const actionBar = el.querySelector('.msgActionBar');
+		if (actionBar && !actionBar.querySelector('.historyBtn') && m.editLogs && m.editLogs.length > 0) {
+			const histBtn = document.createElement('button');
+			histBtn.className = 'msgActionBtn historyBtn';
+			histBtn.title = '編集履歴';
+			histBtn.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+			histBtn.onclick = (e) => {
+				e.stopPropagation();
+				openEditHistory(m);
+			};
+			const editBtn = actionBar.querySelector('.editBtn');
+			if (editBtn && editBtn.nextSibling) {
+				actionBar.insertBefore(histBtn, editBtn.nextSibling);
+			} else {
+				const replyBtn = actionBar.querySelector('.replyBtn');
+				if (replyBtn && replyBtn.nextSibling) {
+					actionBar.insertBefore(histBtn, replyBtn.nextSibling);
+				} else {
+					actionBar.appendChild(histBtn);
+				}
+			}
+		}
+	}
+
+	function openEditHistory(m) {
+		if (!m || !m.editLogs || !m.editLogs.length) return;
+		const overlay = document.getElementById('ovEditHistory');
+		const content = document.getElementById('editHistoryContent');
+		content.innerHTML = '';
+		const logs = m.editLogs;
+		for (let i = 0; i < logs.length; i++) {
+			const entry = logs[i];
+			const div = document.createElement('div');
+			div.className = 'editHistEntry';
+			const header = document.createElement('div');
+			header.className = 'editHistHeader';
+			const versionLabel = i === 0 ? '元のメッセージ' : 'バージョン ' + (i + 1);
+			header.textContent = versionLabel + '  ·  ' + fmtTime(entry.ts);
+			div.appendChild(header);
+			const oldTextDiv = document.createElement('div');
+			oldTextDiv.className = 'editHistDiff';
+			oldTextDiv.textContent = entry.text || '(空)';
+			div.appendChild(oldTextDiv);
+			content.appendChild(div);
+		}
+		const currentDiv = document.createElement('div');
+		currentDiv.className = 'editHistEntry current';
+		const currentHeader = document.createElement('div');
+		currentHeader.className = 'editHistHeader';
+		currentHeader.textContent = '現在のバージョン  ·  ' + fmtTime(m.edited || m.ts);
+		currentDiv.appendChild(currentHeader);
+		const textDiv = document.createElement('div');
+		textDiv.className = 'editHistDiff';
+		textDiv.textContent = m.text || '(空)';
+		currentDiv.appendChild(textDiv);
+		content.appendChild(currentDiv);
+		overlay.classList.add('show');
 	}
 
 	function jumpToMessage(id) {
@@ -8119,6 +8426,10 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (!text || !App.connected) return;
 		TypingState.stopTyping();
 		App._captionTyping.delete(Identity.id);
+		if (pendingEdit) {
+			sendEditMessage(pendingEdit.id, text);
+			return;
+		}
 		sendAppMessage({
 			k: 'chat',
 			id: uid(),
@@ -8127,7 +8438,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			replyTo: pendingReply,
 		});
 		ta.value = '';
-		ta.style.height = 'auto';
+		ta.style.height = '36px';
 		cancelReply();
 	}
 	async function sendFile(file) {
@@ -8202,6 +8513,8 @@ window.addEventListener('DOMContentLoaded', () => {
 			console.log('Opening room postponed: initial setup not completed.');
 			return;
 		}
+		cancelEdit();
+		cancelReply();
 		console.log('Opening room: ', roomId, {
 			name,
 			persist,
@@ -8689,6 +9002,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
 	document.getElementById('btnSend').onclick = sendTextMessage;
 	document.getElementById('replyBarClose').onclick = cancelReply;
+	document.getElementById('editBarClose').onclick = cancelEdit;
+	document.getElementById('editHistoryClose').onclick = () =>
+		document.getElementById('ovEditHistory').classList.remove('show');
+	document.getElementById('ovEditHistory').addEventListener('click', (e) => {
+		if (e.target === e.currentTarget)
+			document.getElementById('ovEditHistory').classList.remove('show');
+	});
 	const msgInput = document.getElementById('msgInput');
 	msgInput.addEventListener('keydown', (e) => {
 		if (e.key === 'Enter' && e.ctrlKey) {
@@ -8697,7 +9017,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		}
 	});
 	msgInput.addEventListener('input', () => {
-		msgInput.style.height = 'auto';
+		msgInput.style.height = '36px';
 		msgInput.style.height = Math.min(120, msgInput.scrollHeight - 1) + 'px';
 		if (msgInput.value.trim()) {
 			TypingState.startTyping();
@@ -8735,6 +9055,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		const btnEmoji = document.getElementById('btnEmoji');
 		EmojiMartUI.open(btnEmoji, (emojiKey) => {
 			insertIntoComposer(emojiKey);
+			EmojiMartUI.close();
 		});
 	};
 	// 入力欄に絵文字を挿入する（Unicode絵文字はそのまま、NyaXEmojiは _id_ 記法で）
