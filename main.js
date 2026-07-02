@@ -1232,9 +1232,7 @@ window.addEventListener('DOMContentLoaded', () => {
 					st.receivedBytes = blob.size;
 					st.totalBytes = blob.size;
 
-					if (refresh) {
-						renderLog();
-					} else if (
+					if (
 						file.fileId &&
 						typeof updateFileMessageEl === 'function'
 					) {
@@ -3696,11 +3694,9 @@ window.addEventListener('DOMContentLoaded', () => {
 							App.userConnections.set(ju.uid, new Set());
 						if (ju.peerId)
 							App.userConnections.get(ju.uid).add(ju.peerId);
-						addSystemMessage(ju.name + ' が入室しました');
 						renderHeader();
 						renderUserPopover();
 						renderVoiceScreen();
-						renderLog();
 						if (
 							App.localStream &&
 							!App.isHidden &&
@@ -3739,7 +3735,6 @@ window.addEventListener('DOMContentLoaded', () => {
 					renderHeader();
 					renderUserPopover();
 					renderVoiceScreen();
-					renderLog();
 					// user-update で inVoice が true になった相手に、
 					// 自分がボイスチャット中なら接続を開始する（後参加者との接続漏れ防止）
 					if (
@@ -4164,7 +4159,6 @@ window.addEventListener('DOMContentLoaded', () => {
 			renderHeader();
 			renderUserPopover();
 			renderVoiceScreen();
-			renderLog();
 			refreshSocialIfOpen();
 			// presence で inVoice が true になった相手に、
 			// 自分がボイスチャット中なら接続を開始する（後参加者との接続漏れ防止）
@@ -4180,6 +4174,8 @@ window.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 		if (payload.k === 'history') {
+			const newlyAdded = [];
+			const newlyDeleted = [];
 			for (const m of payload.messages || []) {
 				if (m.uid && App.mutedUsers.has(m.uid)) continue;
 				// 送信者以外のユーザーのメッセージが含まれている場合は無視する (なりすまし防止)
@@ -4260,11 +4256,26 @@ window.addEventListener('DOMContentLoaded', () => {
 							deleteFileRecord(m.file.fileId).catch(() => {});
 							App.fileTransfers.delete(m.file.fileId);
 						}
+						newlyDeleted.push(m.id);
+					} else if (!m.deleted) {
+						newlyAdded.push(m);
 					}
 				}
 			}
 			persistIfNeeded();
-			renderLog();
+			const log = document.getElementById('log');
+			if (log && log.children.length > 0 && logChronCache.length > 0) {
+				for (const m of newlyAdded) {
+					appendMessageEl(m);
+				}
+				for (const id of newlyDeleted) {
+					const el = document.getElementById('m_' + id);
+					if (el) markElDeleted(el);
+				}
+				if (newlyAdded.length) scrollLogToBottom();
+			} else {
+				renderLog();
+			}
 			return;
 		}
 		if (payload.k === 'chat' || payload.k === 'file') {
@@ -5181,7 +5192,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	function addSystemMessage(text) {
 		if (!text) return;
 		appendSystemEl({ text });
-		scrollLogToBottom();
+		scrollLogToBottom(true);
 	}
 
 	function handleReplyFromNotification(replyText, sender, room) {
@@ -7216,7 +7227,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		for (let i = logRenderedFrom; i < logChronCache.length; i++) {
 			appendMessageEl(logChronCache[i]);
 		}
-		scrollLogToBottom();
+		scrollLogToBottom(true);
 	}
 
 	// ログ先頭に監視用の見えないセンチネルを設置し、
@@ -8065,9 +8076,16 @@ window.addEventListener('DOMContentLoaded', () => {
 		renderFileBody(body, msg);
 		return true;
 	}
-	function scrollLogToBottom() {
+	function isNearBottom(el, threshold) {
+		if (!el) return true;
+		threshold = threshold || 60;
+		return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+	}
+	function scrollLogToBottom(force = false) {
 		const log = document.getElementById('log');
-		log.scrollTop = log.scrollHeight;
+		if (force || isNearBottom(log)) {
+			log.scrollTop = log.scrollHeight;
+		}
 	}
 
 	/* ===================== reply (返信) ===================== */
