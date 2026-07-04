@@ -3543,11 +3543,19 @@ window.addEventListener('DOMContentLoaded', () => {
 		renderVoiceScreen();
 	}
 
-	function resetClientHeartbeatTimer(peerId) {
+	function resetClientHeartbeatTimer(peerId, extraGrace) {
 		if (App.clientTimers.has(peerId))
 			clearTimeout(App.clientTimers.get(peerId));
 		const conn = App.conns.get(peerId);
 		const uid = conn?.metadata?.uid || null;
+		// extraGrace: 相手がバックグラウンドから復帰した直後などは、
+		// 直前まで長い間隔(60秒)でハートビートを送っていた相手が
+		// すぐに短い間隔に追従できるとは限らない。その1サイクルだけ
+		// バックグラウンド用の猶予(60秒)を適用し、通常間隔とのズレによる
+		// 誤切断判定を防ぐ。
+		const timeoutMs = extraGrace
+			? Math.max(getHeartbeatTimeoutMs(uid), BACKGROUND_HEARTBEAT_TIMEOUT_MS)
+			: getHeartbeatTimeoutMs(uid);
 		App.clientTimers.set(
 			peerId,
 			setTimeout(() => {
@@ -3558,7 +3566,7 @@ window.addEventListener('DOMContentLoaded', () => {
 					return;
 				}
 				handleClientDisconnect(peerId, currentConn.metadata.uid);
-			}, getHeartbeatTimeoutMs(uid)),
+			}, timeoutMs),
 		);
 	}
 	function broadcast(msg, excludePeerIds) {
@@ -3600,15 +3608,22 @@ window.addEventListener('DOMContentLoaded', () => {
 	function getReconnectGracePeriodMs() {
 		return App.isHidden ? 60000 : HEARTBEAT_TIMEOUT_MS;
 	}
-	function resetHostTimeout() {
+	function resetHostTimeout(extraGrace) {
 		clearTimeout(App.hostTimeoutTimer);
+		// extraGrace: バックグラウンド復帰直後の1サイクルは、直前まで
+		// 長い間隔(60秒)で心拍を送っていたホスト側がまだ短い間隔に
+		// 追従できていない可能性があるため、60秒の猶予を確保してから
+		// 通常のタイムアウト判定に戻す。
+		const graceMs = extraGrace
+			? Math.max(getReconnectGracePeriodMs(), 60000)
+			: getReconnectGracePeriodMs();
 		App.hostTimeoutTimer = setTimeout(() => {
 			if (App.isHidden) {
 				resetHostTimeout();
 				return;
 			}
 			if (!App.reconnecting) reconnectAfterLoss();
-		}, getReconnectGracePeriodMs());
+		}, graceMs);
 	}
 
 	/* ---- shared incoming handler ---- */
@@ -4424,19 +4439,14 @@ window.addEventListener('DOMContentLoaded', () => {
 					renderVoiceScreen();
 				}
 				// B3 fix: SpeechSynthesis 非サポート環境でのエラーを防ぐ
-				if (App.ttsOn && payload.k === 'chat' && payload.text) {
-					if (
-						typeof speechSynthesis !== 'undefined' &&
-						speechSynthesis.speak
-					) {
-						try {
-							const u = new SpeechSynthesisUtterance(
-								payload.text,
-							);
-							u.lang = 'ja-JP';
-							speechSynthesis.speak(u);
-						} catch (e) {}
-					}
+				// （speakText 内で未サポート環境は安全に no-op になる）
+				if (
+					App.ttsOn &&
+					payload.k === 'chat' &&
+					payload.text &&
+					payload.uid !== Identity.id
+				) {
+					speakText(payload.text);
 				}
 			}
 			return;
@@ -4682,6 +4692,12 @@ window.addEventListener('DOMContentLoaded', () => {
 			});
 			if (App.captionsOn) {
 				renderVoiceScreen();
+			}
+			// 自分自身のテキストチャット送信も読み上げ対象にする
+			// （これまで受信側にしか読み上げ処理が無く、自分の発言は
+			// 一切読み上げられていなかった）
+			if (App.ttsOn && payload.k === 'chat' && payload.text) {
+				speakText(payload.text);
 			}
 		}
 		return payload;
@@ -5848,6 +5864,139 @@ window.addEventListener('DOMContentLoaded', () => {
 		});
 	}
 
+	/* ===================== text-to-speech (チャット読み上げ) ===================== */
+
+	// speechSynthesis.getVoices() は多くの環境（Chrome/Android WebView 等）で
+	// ページ読み込み直後は空配列を返し、'voiceschanged' イベント発火後に
+	// ようやく音声一覧が確定する。これを待たずに speak() すると、
+	// 対応する言語の声が見つからず無音のまま終わる／エンジンが未初期化で
+	// 発話イベント自体が発生しない、といった不具合が多くの環境で起きるため、
+	// 一度だけ voices を確実に取得できるようにしておく。
+	let _ttsVoicesReadyPromise = null;
+	function waitForTtsVoices() {
+		if (_ttsVoicesReadyPromise) return _ttsVoicesReadyPromise;
+		_ttsVoicesReadyPromise = new Promise((resolve) => {
+			if (typeof speechSynthesis === 'undefined') {
+				resolve([]);
+				return;
+			}
+			const existing = speechSynthesis.getVoices();
+			if (existing && existing.length) {
+				resolve(existing);
+				return;
+			}
+			let settled = false;
+			const finish = () => {
+				if (settled) return;
+				settled = true;
+				try {
+					speechSynthesis.removeEventListener(
+						'voiceschanged',
+						onVoicesChanged,
+					);
+				} catch (e) {}
+				resolve(speechSynthesis.getVoices() || []);
+			};
+			const onVoicesChanged = () => finish();
+			try {
+				speechSynthesis.addEventListener(
+					'voiceschanged',
+					onVoicesChanged,
+				);
+			} catch (e) {}
+			// voiceschanged が発火しない環境（一部の WebView 等）向けの保険。
+			// いつまでも待ち続けないよう、一定時間で諦めて空/デフォルト音声のまま進める。
+			setTimeout(finish, 1000);
+		});
+		return _ttsVoicesReadyPromise;
+	}
+
+	// チャットメッセージ読み上げのキュー。speechSynthesis.speak() は
+	// ブラウザ内部でキューイングされるだけで、連投されると溜まった分を
+	// 延々と喋り続けたり、環境によっては2件目以降が発火しなかったりするため、
+	// アプリ側でも簡易キューを持ち、直前の発話が残っていれば打ち切ってから
+	// 次を読み上げるようにする。
+	const _ttsQueue = [];
+	let _ttsSpeaking = false;
+
+	function speakText(text) {
+		if (!text) return;
+		// Android ラッパー側でネイティブ TTS に置き換えられるように、
+		// speechSynthesis の可否に関わらず常にカスタムイベントを発火しておく。
+		// Android 側で window.NCTts 的なブリッジが処理した場合は
+		// preventDefault() で Web 側の speechSynthesis 発話を止められるようにする。
+		let nativeHandled = false;
+		try {
+			const ev = new CustomEvent('ncweb:tts-request', {
+				detail: { text },
+				cancelable: true,
+			});
+			window.dispatchEvent(ev);
+			nativeHandled = ev.defaultPrevented;
+		} catch (e) {}
+		if (nativeHandled) return;
+
+		if (
+			typeof speechSynthesis === 'undefined' ||
+			typeof SpeechSynthesisUtterance === 'undefined'
+		) {
+			return;
+		}
+
+		_ttsQueue.push(text);
+		_pumpTtsQueue();
+	}
+
+	function _pumpTtsQueue() {
+		if (_ttsSpeaking) return;
+		const text = _ttsQueue.shift();
+		if (text === undefined) return;
+		_ttsSpeaking = true;
+
+		const speakNow = () => {
+			try {
+				const u = new SpeechSynthesisUtterance(text);
+				u.lang = 'ja-JP';
+				const voices = speechSynthesis.getVoices() || [];
+				// 明示的に ja-JP（近似含む）の声が見つかればそれを使う。
+				// 見つからない場合はブラウザのデフォルト声・言語設定に委ねる
+				// （lang だけ指定して声が無いと無音になる環境があるため）。
+				const jaVoice = voices.find((v) =>
+					(v.lang || '').toLowerCase().startsWith('ja'),
+				);
+				if (jaVoice) u.voice = jaVoice;
+				let finished = false;
+				const done = () => {
+					if (finished) return;
+					finished = true;
+					_ttsSpeaking = false;
+					_pumpTtsQueue();
+				};
+				u.onend = done;
+				u.onerror = done;
+				// 一部環境では onend/onerror が発火しないことがあるため、
+				// 発話が詰まってキュー全体が止まらないようにフォールバックで解放する。
+				setTimeout(done, Math.max(4000, text.length * 300));
+				speechSynthesis.speak(u);
+			} catch (e) {
+				_ttsSpeaking = false;
+				_pumpTtsQueue();
+			}
+		};
+
+		waitForTtsVoices().then(speakNow);
+	}
+
+	function stopTtsQueue() {
+		_ttsQueue.length = 0;
+		_ttsSpeaking = false;
+		if (typeof speechSynthesis !== 'undefined' && speechSynthesis.cancel) {
+			try {
+				speechSynthesis.cancel();
+			} catch (e) {}
+		}
+	}
+
 	/* ===================== speech recognition (字幕用音声認識) ===================== */
 
 	function startSpeechRecognition() {
@@ -6121,11 +6270,8 @@ window.addEventListener('DOMContentLoaded', () => {
 		_captionDotPhase = 0;
 		featuredUid = null;
 		// B4 fix: VC 離脱時に進行中の TTS 読み上げをキャンセルする
-		if (typeof speechSynthesis !== 'undefined' && speechSynthesis.cancel) {
-			try {
-				speechSynthesis.cancel();
-			} catch (e) {}
-		}
+		// （キューに溜まっている未読分も含めて確実に破棄する）
+		stopTtsQueue();
 
 		setOwnVoiceOption({ inVoice: false, cameraOn: false });
 
@@ -6162,6 +6308,9 @@ window.addEventListener('DOMContentLoaded', () => {
 		}
 	}
 	document.addEventListener('visibilitychange', async () => {
+		const wasHidden = App.isHidden;
+		const becameVisible =
+			wasHidden && document.visibilityState === 'visible';
 		App.isHidden = document.visibilityState === 'hidden';
 		// setInterval は開始時の間隔のまま固定されるため、
 		// hidden 状態が変わるたびに新しい間隔で張り直す
@@ -6175,9 +6324,29 @@ window.addEventListener('DOMContentLoaded', () => {
 		}
 		if (document.visibilityState === 'visible') {
 			if (App.connected) {
-				resetHostTimeout();
+				// バックグラウンド復帰直後は、モバイル端末で接続が実際には
+				// スロットリング/切断されていても close イベントがまだ
+				// 届いていないケースがある。通常間隔(15秒)のタイムアウトを
+				// 即座に適用すると、直前の心拍から間が空いている分だけ
+				// 誤って切断判定してしまうことがあるため、復帰直後の
+				// 1サイクルだけは猶予を確保しつつ即座に生存確認を行う。
+				if (becameVisible && App.heartbeatConn) {
+					if (App.heartbeatConn.open) {
+						try {
+							App.heartbeatConn.send({
+								t: 'sys',
+								sub: 'heartbeat',
+							});
+						} catch (e) {}
+					} else if (!App.reconnecting) {
+						// DataConnection 自体がクローズ済みなら
+						// 即座に再接続フローへ移行する
+						reconnectAfterLoss();
+					}
+				}
+				resetHostTimeout(becameVisible);
 				App.clientTimers.forEach((_, peerId) =>
-					resetClientHeartbeatTimer(peerId),
+					resetClientHeartbeatTimer(peerId, becameVisible),
 				);
 			}
 			if (App.localStream) {
@@ -9236,6 +9405,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		App.ttsOn = !App.ttsOn;
 		// B6 fix: captionBtn と同様に即時反映のため先にツールバー更新
 		renderVoiceToolbar();
+		if (!App.ttsOn) stopTtsQueue();
 		setOwnVoiceOption({ ttsOn: App.ttsOn });
 	};
 
