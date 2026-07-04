@@ -1142,11 +1142,21 @@ window.addEventListener('DOMContentLoaded', () => {
 			if (!targetPeerId) return false;
 			const conn = App.conns.get(targetPeerId);
 			if (!conn || !conn.open) return false;
-			conn.send({ t: 'data', from: Identity.id, payload });
+			try {
+				conn.send({ t: 'data', from: Identity.id, payload });
+			} catch (e) {
+				console.warn('sendTargeted send failed:', targetPeerId, e);
+				return false;
+			}
 			return true;
 		}
 		if (!App.hostConn || !App.hostConn.open) return false;
-		App.hostConn.send({ t: 'relay', toUid, payload });
+		try {
+			App.hostConn.send({ t: 'relay', toUid, payload });
+		} catch (e) {
+			console.warn('sendTargeted hostConn send failed:', e);
+			return false;
+		}
 		return true;
 	}
 
@@ -3402,11 +3412,29 @@ window.addEventListener('DOMContentLoaded', () => {
 					} catch (e) {}
 					return;
 				}
+				// セキュリティ修正: meta.peerId はクライアントの自己申告値であり、
+				// 実際にこの DataConnection を張っている conn.peer と一致する保証がない。
+				// 以前は「meta.peerId || conn.peer」を署名対象に使っていたため、
+				// 過去に傍受した他人の connect-auth（pub/sig/ts/peerId一式）を
+				// 別の（攻撃者自身の）Peer接続でそのまま送りつけるリプレイ攻撃が
+				// 署名検証を通過してしまっていた（peerId不一致がチェックされないため）。
+				// 署名の対象は常に「実際にこの接続を張っている conn.peer」に固定し、
+				// meta.peerId が指定されている場合はそれが conn.peer と一致することを必須にする。
+				if (meta.peerId && meta.peerId !== conn.peer) {
+					console.warn(
+						'connect-authのpeerIdが実際の接続元peerと不一致のため拒否しました',
+						{ claimed: meta.peerId, actual: conn.peer },
+					);
+					try {
+						conn.close();
+					} catch (e) {}
+					return;
+				}
 				const signable = {
 					k: 'connect-auth',
 					roomId: App.roomId,
 					uid: meta.uid,
-					peerId: meta.peerId || conn.peer,
+					peerId: conn.peer,
 					ts: meta.ts,
 				};
 				const ok = await verifyPayload(
@@ -3451,7 +3479,9 @@ window.addEventListener('DOMContentLoaded', () => {
 				captionsOn: !!meta.captionsOn,
 				ttsOn: !!meta.ttsOn,
 				inVoice: !!meta.inVoice,
-				peerId: meta.peerId || conn.peer,
+				// 上で meta.peerId === conn.peer であることを検証済みなので、
+				// ここでは常に信頼できる conn.peer を使う
+				peerId: conn.peer,
 			});
 			App.allMembers.set(meta.uid, {
 				uid: meta.uid,
@@ -3460,7 +3490,7 @@ window.addEventListener('DOMContentLoaded', () => {
 				captionsOn: !!meta.captionsOn,
 				ttsOn: !!meta.ttsOn,
 				inVoice: !!meta.inVoice,
-				peerId: meta.peerId || conn.peer,
+				peerId: conn.peer,
 			});
 			UserStore.upsert({
 				uid: meta.uid,
@@ -3475,24 +3505,34 @@ window.addEventListener('DOMContentLoaded', () => {
 				);
 			}
 			resetClientHeartbeatTimer(conn.peer);
-			conn.send({
-				t: 'sys',
-				sub: 'sync',
-				payload: {
-					users: Array.from(App.users.values()),
-					allMembers: Array.from(App.allMembers.values()),
-					roomOption: App.roomOption,
-					// 自分が送信したメッセージのみ送信（他者のメッセージは検証が通らないため）
-					messages: Array.from(App.messages.values()).filter(
-						(m) => m.uid === Identity.id,
-					),
-					myInfo: {
-						uid: Identity.id,
-						name: Profile.name,
-						image: Profile.image,
+			try {
+				conn.send({
+					t: 'sys',
+					sub: 'sync',
+					payload: {
+						users: Array.from(App.users.values()),
+						allMembers: Array.from(App.allMembers.values()),
+						roomOption: App.roomOption,
+						// 自分が送信したメッセージのみ送信（他者のメッセージは検証が通らないため）
+						messages: Array.from(App.messages.values()).filter(
+							(m) => m.uid === Identity.id,
+						),
+						myInfo: {
+							uid: Identity.id,
+							name: Profile.name,
+							image: Profile.image,
+						},
 					},
-				},
-			});
+				});
+			} catch (e) {
+				// 初期同期に失敗した接続は不完全な状態のまま残すより
+				// 切断して handleClientDisconnect に後始末させたほうが安全
+				console.warn('sync send failed, dropping connection:', conn.peer, e);
+				try {
+					conn.close();
+				} catch (e2) {}
+				return;
+			}
 			broadcast(
 				{
 					t: 'sys',
@@ -3571,8 +3611,17 @@ window.addEventListener('DOMContentLoaded', () => {
 	}
 	function broadcast(msg, excludePeerIds) {
 		excludePeerIds = excludePeerIds || [];
+		// conn.send() は稀に（シリアライズ失敗やチャンネル状態異常などで）
+		// 同期的に例外を投げることがある。try/catch なしだと forEach が
+		// その場で中断し、まだ送信していない残りの参加者に配信されない
+		// バグになるため、1件ずつ独立して失敗を握りつぶす。
 		App.conns.forEach((conn, peerId) => {
-			if (!excludePeerIds.includes(peerId) && conn.open) conn.send(msg);
+			if (excludePeerIds.includes(peerId) || !conn.open) return;
+			try {
+				conn.send(msg);
+			} catch (e) {
+				console.warn('broadcast send failed:', peerId, e);
+			}
 		});
 	}
 
@@ -3602,7 +3651,10 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (!conn) return;
 		clearInterval(App.heartbeatTimer);
 		App.heartbeatTimer = setInterval(() => {
-			if (conn.open) conn.send({ t: 'sys', sub: 'heartbeat' });
+			if (!conn.open) return;
+			try {
+				conn.send({ t: 'sys', sub: 'heartbeat' });
+			} catch (e) {}
 		}, getHeartbeatIntervalMs());
 	}
 	function getReconnectGracePeriodMs() {
@@ -5414,6 +5466,24 @@ window.addEventListener('DOMContentLoaded', () => {
 			} catch (e) {}
 			return;
 		}
+		// セキュリティ修正: metadata.uid はクライアントの自己申告値であり、
+		// 実際の発信元 Peer（call.peer）がその uid の登録済み peerId と
+		// 一致するかを検証していなかった。これにより、悪意ある第三者が
+		// 別の Peer から metadata.uid だけ他人の uid に詐称して発信することで、
+		// 本来の相手になりすまして音声を送り込める余地があった。
+		// 着信側では call.peer と App.users 上の登録済み peerId が
+		// 一致する場合のみ受け入れる（登録前の一時的な不一致はリトライで解消する）。
+		const knownPeerId = App.users.get(remote) && App.users.get(remote).peerId;
+		if (knownPeerId && call.peer && knownPeerId !== call.peer) {
+			console.warn(
+				'着信の発信元peerが登録済みuidのpeerIdと不一致のため拒否しました',
+				{ remote, claimedPeer: call.peer, knownPeerId },
+			);
+			try {
+				call.close();
+			} catch (e) {}
+			return;
+		}
 		// 同一相手との古い接続が残っている場合は、取り違えてstopVoiceWithが
 		// 新しい接続を巻き添えで破棄しないよう、明示的に古い接続を切ってから差し替える
 		const existing = App.voiceConns.get(remote);
@@ -5474,6 +5544,24 @@ window.addEventListener('DOMContentLoaded', () => {
 	function bindScreenCall(call) {
 		const remote = call.metadata && call.metadata.uid;
 		if (!remote || !App.users.has(remote)) {
+			try {
+				call.close();
+			} catch (e) {}
+			return;
+		}
+		// セキュリティ修正: bindCall と同様に、metadata.uid の自己申告だけでなく
+		// 実際の発信元 Peer（call.peer）が登録済み peerId と一致するかを検証する。
+		const knownScreenPeerId =
+			App.users.get(remote) && App.users.get(remote).peerId;
+		if (
+			knownScreenPeerId &&
+			call.peer &&
+			knownScreenPeerId !== call.peer
+		) {
+			console.warn(
+				'画面共有着信の発信元peerが登録済みuidのpeerIdと不一致のため拒否しました',
+				{ remote, claimedPeer: call.peer, knownScreenPeerId },
+			);
 			try {
 				call.close();
 			} catch (e) {}
@@ -9412,7 +9500,10 @@ window.addEventListener('DOMContentLoaded', () => {
 	window.addEventListener('beforeunload', () => resetConnectionState());
 
 	window.addEventListener('online', () => {
-		if (App.peer && !App.peer.destroyed) {
+		// disconnected でない（=既にシグナリングサーバーに接続中の）peer に対して
+		// reconnect() を呼ぶのは無意味かつ不要なエラー/警告の原因になるため、
+		// 実際に切断済みの場合のみ呼び出す。
+		if (App.peer && !App.peer.destroyed && App.peer.disconnected) {
 			try {
 				App.peer.reconnect();
 			} catch (e) {}
