@@ -4338,8 +4338,23 @@ window.addEventListener('DOMContentLoaded', () => {
 								(existing.editLogs || []).length));
 				if (!existing || (m.deleted && !existing.deleted) || isEditUpdate) {
 					const wasDeleted = existing && existing.deleted;
+					// history再送で使われるメッセージのスナップショットには
+					// reactions が含まれない（自分の投稿history同期は chat/file
+					// フィールドのみを対象にしているため）。
+					// isEditUpdate によるマージ時に existing.reactions を
+					// 引き継がないと、他人が編集しただけでリアクションが
+					// 消失してしまうため、既存の reactions を保持する。
+					if (
+						existing &&
+						existing.reactions &&
+						!m.reactions &&
+						!m.deleted
+					) {
+						m.reactions = existing.reactions;
+					}
 					App.messages.set(m.id, m);
 					indexMessage(m);
+					applyPendingReactions(m); // 先着していたreactionイベントを反映
 					if (m.deleted && !wasDeleted) {
 						// ファイルメッセージ削除時は関連ファイルをIndexedDBから削除
 						if (m.k === 'file' && m.file && m.file.fileId) {
@@ -4416,6 +4431,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			// data / dataB64 は完全廃止したため埋め込み処理は削除
 			App.messages.set(payload.id, payload);
 			indexMessage(payload);
+			applyPendingReactions(payload); // 先着していたreactionイベントを反映
 			persistIfNeeded();
 			appendMessageEl(payload);
 			scrollLogToBottom();
@@ -4624,9 +4640,8 @@ window.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 		if (payload.k === 'reaction') {
+			pruneExpiredPendingReactions(); // ついでに期限切れの保留分を掃除
 			if (!payload.pub || !payload.sig || !payload.uid) return;
-			const m = App.messages.get(payload.id);
-			if (!m || m.deleted) return;
 			// emojiキーは Unicode絵文字 または NyaXEmoji id（"nyax:xxxx"）のみ許容
 			if (
 				typeof payload.emoji !== 'string' ||
@@ -4649,6 +4664,15 @@ window.addEventListener('DOMContentLoaded', () => {
 			);
 			if (!ok) {
 				console.warn('リアクションの署名検証に失敗しました');
+				return;
+			}
+			const m = App.messages.get(payload.id);
+			if (!m || m.deleted) {
+				// 対象メッセージがまだ届いていない場合（history同期やP2Pの
+				// 到着順序の入れ替わりで、reactionイベントの方が先に着くことがある）、
+				// ここで破棄すると同期漏れの原因になるため一旦保留し、
+				// メッセージ本体が届いた時点で改めて適用する。
+				if (!m) stashPendingReaction(payload);
 				return;
 			}
 			applyReactionToMessage(
@@ -4725,6 +4749,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		});
 		App.messages.set(payload.id, payload);
 		indexMessage(payload);
+		applyPendingReactions(payload);
 		persistIfNeeded();
 		appendMessageEl(payload);
 		scrollLogToBottom();
@@ -4861,6 +4886,65 @@ window.addEventListener('DOMContentLoaded', () => {
 		return /^[\p{Extended_Pictographic}\p{Emoji_Modifier}\uFE0F\u200D\p{Mn}]{1,16}$/u.test(
 			emoji,
 		);
+	}
+
+	// リアクションイベントが対象メッセージより先に届いた場合の一時保管領域。
+	// key: メッセージid, value: Map(uid+':'+emoji -> {uid, emoji, active, ts})
+	// 同一uid+emoji の重複到着は ts が新しい方で上書きし、最終的にメッセージが
+	// 届いた時点で保留分をまとめて適用することで、到着順序に依存した
+	// リアクション消失（同期漏れ）を防ぐ。
+	const pendingReactions = new Map();
+	const PENDING_REACTION_TTL_MS = 5 * 60 * 1000; // 5分より古い保留分は破棄する
+
+	function stashPendingReaction(payload) {
+		let bucket = pendingReactions.get(payload.id);
+		if (!bucket) {
+			bucket = new Map();
+			pendingReactions.set(payload.id, bucket);
+		}
+		const key = payload.uid + ':' + payload.emoji;
+		const existing = bucket.get(key);
+		if (!existing || (payload.ts || 0) >= (existing.ts || 0)) {
+			bucket.set(key, {
+				uid: payload.uid,
+				emoji: payload.emoji,
+				active: !!payload.active,
+				ts: payload.ts || Date.now(),
+			});
+		}
+	}
+
+	// 対象メッセージが App.messages に追加された直後に呼び、
+	// 先に届いていた保留中リアクションがあればまとめて適用する。
+	function applyPendingReactions(m) {
+		if (!m || !m.id) return;
+		const bucket = pendingReactions.get(m.id);
+		if (!bucket || !bucket.size) return;
+		pendingReactions.delete(m.id);
+		const now = Date.now();
+		let changed = false;
+		for (const entry of bucket.values()) {
+			if (now - entry.ts > PENDING_REACTION_TTL_MS) continue; // 古すぎる保留分は無視
+			if (applyReactionToMessage(m, entry.uid, entry.emoji, entry.active)) {
+				changed = true;
+			}
+		}
+		if (changed) {
+			persistIfNeeded();
+			updateReactionsEl(m);
+		}
+	}
+
+	// pendingReactions が無制限に増えないよう、メッセージ受信のたびに
+	// 期限切れの保留分を掃除する（対象メッセージが結局届かなかったケースの対策）。
+	function pruneExpiredPendingReactions() {
+		const now = Date.now();
+		for (const [msgId, bucket] of pendingReactions) {
+			for (const [key, entry] of bucket) {
+				if (now - entry.ts > PENDING_REACTION_TTL_MS) bucket.delete(key);
+			}
+			if (!bucket.size) pendingReactions.delete(msgId);
+		}
 	}
 
 	// メッセージオブジェクトの reactions を更新する（emoji -> Set(uid)）
