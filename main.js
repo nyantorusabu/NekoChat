@@ -242,7 +242,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		} finally {
 			db.close();
 		}
-		// メモリ上の転送状態もクリア（該当ルーム分）
+		// メモリ上の転送状態もクリア（該当スペース分）
 		for (const [key, st] of Array.from(App.fileTransfers.entries())) {
 			if (
 				st &&
@@ -838,7 +838,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (isMobile) {
 			if (!open && wasOpen && !fromHistory) {
 				// サイドバーを閉じた: 直前にpushしていた履歴があれば消費して戻る。
-				// なければ（例: ルーム一覧を起点にそのまま閉じた等）何もしない。
+				// なければ（例: スペース一覧を起点にそのまま閉じた等）何もしない。
 				const idx = backStack.findIndex((item) => item.type === 'sidebar');
 				if (idx !== -1) {
 					backStack.splice(idx, 1);
@@ -944,7 +944,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	// simple/voiceは値を持たないフラグパラメータとして扱う。
 	// URLSearchParamsのset(key, '')は必ず "key=" という空の=付き文字列になってしまうため、
 	// "&voice=" のような不格好な表記を避けるべく手組みでクエリ文字列を生成する。
-	// roomId未指定時は r パラメータを含めない（ルーム未参加時のURL用）。
+	// roomId未指定時は r パラメータを含めない（スペース未参加時のURL用）。
 	function buildModeSearch(roomId) {
 		const parts = [];
 		if (roomId) parts.push('r=' + encodeURIComponent(roomId));
@@ -953,7 +953,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		return parts.length ? '?' + parts.join('&') : '';
 	}
 	// voiceパラメータでボイスチャットモーダルを開いた後、URLから自動削除する
-	// （再読み込みやルーム再入で勝手にモーダルが再オープンしないようにするため）
+	// （再読み込みやスペース再入で勝手にモーダルが再オープンしないようにするため）
 	// buildModeSearchと同じくフラグ形式（=なし）で再構成し、空の "simple=" 等が
 	// 紛れ込まないようにする。
 	function clearVoiceModeParam() {
@@ -1099,7 +1099,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	) {
 		try {
 			if ((await hashPub(pubJwk)) !== expectUid) return false;
-			// クロスルーム再送攻撃（リプレイ）を防ぐため、ルームIDが一致するか検証
+			// クロススペース再送攻撃（リプレイ）を防ぐため、スペースIDが一致するか検証
 			if (signable.roomId && signable.roomId !== App.roomId) return false;
 			// リプレイ攻撃対策: タイムスタンプが現在時刻から±90秒以内のもののみ有効
 			// （以前は過去5分・未来10分を許容していたが、ウィンドウを大幅に縮小）
@@ -2763,7 +2763,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			App.bufferMonitorTimer = null;
 		}
 		if (App._bufStats) App._bufStats.clear();
-		// ルーム移動（skipVoiceRestore=true）の場合は _wasInVoice を更新しない。
+		// スペース移動（skipVoiceRestore=true）の場合は _wasInVoice を更新しない。
 		// 切断からの再接続と誤認して新スペースで通話を自動開始するのを防ぐ。
 		if (!skipVoiceRestore) {
 			App._wasInVoice = App._wasInVoice || !!App.localStream;
@@ -2856,7 +2856,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	}
 
 	function connectFlow() {
-		// ルームから退出済みの場合は接続を開始しない
+		// スペースから退出済みの場合は接続を開始しない
 		if (!App.roomId) return;
 		setStatus(false, '接続中...');
 		const targetRoomId = App.roomId;
@@ -2883,12 +2883,12 @@ window.addEventListener('DOMContentLoaded', () => {
 					peer.destroy();
 				} catch (e) {}
 
-				// ルームが切り替わっていたら古いconnectFlowの処理を中断
+				// スペースが切り替わっていたら古いconnectFlowの処理を中断
 				if (!isActive()) return;
 
-				// 未登録ルームでホストが見つからなかった場合はホームへ戻す
+				// 未登録スペースでホストが見つからなかった場合はホームへ戻す
 				if (requireExistingHost) {
-					toast('ルームが見つかりませんでした。');
+					toast('スペースが見つかりませんでした。');
 					leaveCurrentRoom();
 					return;
 				}
@@ -3175,7 +3175,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			});
 
 			peer.once('open', async () => {
-				// ルームが切り替わっていたら処理を中断
+				// スペースが切り替わっていたら処理を中断
 				if (!isActive()) {
 					try {
 						peer.destroy();
@@ -3202,7 +3202,7 @@ window.addEventListener('DOMContentLoaded', () => {
 				const wireConn = (c) => {
 					c.once('open', () => {
 						if (settled || !isActive()) return;
-						// ルームが切り替わっていたら接続確立を中断
+						// スペースが切り替わっていたら接続確立を中断
 						if (!isActive()) {
 							try {
 								c.close();
@@ -3346,7 +3346,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (attempt === 1) toast('切断されました。再接続しています...');
 		// ユーザーリストを保持して再接続中に参加者が消えるのを防ぐ
 		resetConnectionState(/* keepUsers */ true);
-		// 再接続時はホスト不在の場合に昇格を許可する（招待ルームでも継続可能に）
+		// 再接続時はホスト不在の場合に昇格を許可する（招待スペースでも継続可能に）
 		App.requireExistingHost = false;
 		// 試行回数に応じて待機時間を増やす（最大5秒）
 		const delay = Math.min(300 + (attempt - 1) * 700, 5000);
@@ -4094,7 +4094,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		} else {
 			// 永続→一時への切り替え時は RoomStore から完全に削除する
 			if (App.roomId) RoomStore.remove(App.roomId);
-			// 一時ルームの情報も `App.ephemeral` に保持・更新して一覧描画時に連動させる
+			// 一時スペースの情報も `App.ephemeral` に保持・更新して一覧描画時に連動させる
 			App.ephemeral = {
 				id: App.roomId,
 				name: opt.name,
@@ -4111,7 +4111,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		});
 		applyRoomOption(opt);
 
-		// ルーム変更変更者の電子署名を検証するためにシグネチャを送信
+		// スペース変更変更者の電子署名を検証するためにシグネチャを送信
 		const signable = {
 			k: 'room-option',
 			uid: Identity.id,
@@ -4160,7 +4160,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (payload.k === 'room-option') {
 			if (!payload.pub || !payload.sig || !payload.uid) {
 				console.warn(
-					'検証用データが不足しているため、ルーム設定変更を無視しました',
+					'検証用データが不足しているため、スペース設定変更を無視しました',
 				);
 				return;
 			}
@@ -4181,7 +4181,7 @@ window.addEventListener('DOMContentLoaded', () => {
 				payload.uid,
 			);
 			if (!ok) {
-				console.warn('ルーム設定変更の署名検証に失敗しました');
+				console.warn('スペース設定変更の署名検証に失敗しました');
 				return;
 			}
 			if (
@@ -7576,7 +7576,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	// 連続メッセージと見なす最大時間間隔（5分）
 	const COMPACT_MSG_MAX_GAP_MS = 5 * 60 * 1000;
 
-	// force=true: 常に最下部へスクロール（ルーム切替・初回表示など）
+	// force=true: 常に最下部へスクロール（スペース切替・初回表示など）
 	// force=false（既定）: 再描画前のスクロール位置を可能な限り維持する。
 	// これにより、ファイル受信/転送リクエスト等でログ全体が再描画されても、
 	// 過去ログを閲覧中のユーザーの見ている位置が勝手に最下部へ飛ばされない。
@@ -8020,7 +8020,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		const av = document.createElement('div');
 		av.className = 'avatar msgAvatar';
 		// ユーザー情報を取得
-		// 優先順位: デバイス上の永続ユーザーリストデータ (UserStore) > ルーム内現在のユーザー (App.users) > ルーム履歴 (allMembers) > メッセージフォールバック
+		// 優先順位: デバイス上の永続ユーザーリストデータ (UserStore) > スペース内現在のユーザー (App.users) > スペース履歴 (allMembers) > メッセージフォールバック
 		// これにより、相手のユーザー情報変更時に自動更新されたデバイスデータから表示する
 		const isSelf = m.uid === Identity.id;
 		let senderUser;
@@ -8930,7 +8930,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (!updateFileMessageEl(fileId)) renderLog();
 		// ファイル送信トーストは廃止
 
-		// 受信側からの accept 待ちにせず、現在ルームにいる全ピアへ即座にプッシュ送信する
+		// 受信側からの accept 待ちにせず、現在スペースにいる全ピアへ即座にプッシュ送信する
 		const peerUids = Array.from(App.users.values())
 			.map((u) => u.uid)
 			.filter((u) => u && u !== Identity.id);
@@ -8981,10 +8981,10 @@ window.addEventListener('DOMContentLoaded', () => {
 			persist: !!persist,
 			updatedAt: 0,
 		};
-		// 旧ルームの非同期接続処理が新ルームに割り込まないよう、
-		// ルーム切り替え時点でセッションを進める
+		// 旧スペースの非同期接続処理が新スペースに割り込まないよう、
+		// スペース切り替え時点でセッションを進める
 		nextConnectSession();
-		// ルームの全参加者リストをデバイスから復元（persistルームのみ）
+		// スペースの全参加者リストをデバイスから復元（persistスペースのみ）
 		if (persist && roomId) {
 			const savedMembers = RoomStore.loadMembers(roomId);
 			for (const u of savedMembers) {
@@ -9050,7 +9050,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		renderRoomList();
 		console.log('Created room: ', roomId, { name, persist });
 		openRoom(roomId, meta.name, persist);
-		// 接続確立後にルームオプションを配布（最大10秒でタイムアウト）
+		// 接続確立後にスペースオプションを配布（最大10秒でタイムアウト）
 		const deadline = Date.now() + 10000;
 		const iv = setInterval(() => {
 			if (App.connected) {
@@ -9074,7 +9074,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		App._wasInVoice = false;
 		App._reconnectAttempt = 0;
 		resetConnectionState(/* keepUsers */ false);
-		// 退出時はそのルームのファイル実体をすべて削除
+		// 退出時はそのスペースのファイル実体をすべて削除
 		if (leavingRoomId) {
 			cleanupRoomFiles(leavingRoomId).catch(() => {});
 		}
@@ -9101,7 +9101,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 	/* ===================== fallback check ===================== */
 	function verifyAndFallback(roomId) {
-		// 招待リンクなどで参加する際、一覧にない新規ルームIDが弾かれないように正規表現検証に変更
+		// 招待リンクなどで参加する際、一覧にない新規スペースIDが弾かれないように正規表現検証に変更
 		const isValidId = /^[A-Za-z0-9\-]{4,30}$/.test(roomId);
 		if (!isValidId) {
 			toast('無効なスペースIDです。ホームに戻りました');
@@ -9220,7 +9220,7 @@ window.addEventListener('DOMContentLoaded', () => {
 	async function resetEverything() {
 		if (
 			!(await showConfirm(
-				'全てのルームから退出し、ユーザー情報がリセットされます。',
+				'全てのスペースから退出し、ユーザー情報がリセットされます。',
 				'本当にリセットしますか？',
 			))
 		)
@@ -9276,7 +9276,7 @@ window.addEventListener('DOMContentLoaded', () => {
 			return;
 		}
 
-		// URL変化（ルーム移動など）
+		// URL変化（スペース移動など）
 		handleLocationChange();
 	});
 	document.getElementById('sidebarCloseBtn').onclick = () =>
@@ -9352,7 +9352,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		if (!(await showConfirm('このスペースから退出しますか？'))) return;
 		const roomIdToLeave = App.roomId;
 		leaveCurrentRoom();
-		// ルーム退出時にルーム一覧から該当IDを削除
+		// スペース退出時にスペース一覧から該当IDを削除
 		if (roomIdToLeave) {
 			RoomStore.remove(roomIdToLeave);
 			renderRoomList();
@@ -9594,7 +9594,7 @@ window.addEventListener('DOMContentLoaded', () => {
 		}
 	});
 
-	// URL変化（ルーム移動など）の共通処理
+	// URL変化（スペース移動など）の共通処理
 	// ※popstateハンドラからnkなしの場合に呼ばれる、またはhashchangeから呼ばれる
 	function handleLocationChange() {
 		applySimpleMode();
