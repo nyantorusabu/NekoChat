@@ -248,6 +248,9 @@
 				text-align: center;
 				padding: 30px 0;
 			}
+			.logTopSentinel {
+				height: 1px;
+			}
 
 			.daySep {
 				text-align: center;
@@ -1201,6 +1204,15 @@
 				let lastRenderedMsgTs = 0;
 				const COMPACT_MSG_MAX_GAP_MS = 5 * 60 * 1000;
 
+				// オンライン版と同様、チャットログの表示件数に上限を設け、
+				// 上端までスクロールしたタイミングで自動的に過去ログを追加読み込みする
+				const LOG_INITIAL_BATCH = 25; // 最低限読み込む件数
+				const LOG_LOAD_MORE_BATCH = 25; // 自動追加読み込み時の件数
+				let logChronCache = [];
+				let logRenderedFrom = 0; // logChronCache中、現在描画済みの先頭インデックス
+				let logLoadingMore = false;
+				let logTopObserver = null;
+
 				// テキスト本文が5行を超える場合に折りたたみ処理を適用する
 				// bodyがDOMに追加される前に呼ばれる場合（高さ測定不可）は改行数で判定し、
 				// DOMマウント後にResizeObserverで再確認して過剰な折りたたみを解除する。
@@ -1451,6 +1463,87 @@
 					content.appendChild(row);
 				}
 
+				function isNearBottom(el, threshold) {
+					if (!el) return true;
+					threshold = threshold || 60;
+					return (
+						el.scrollHeight - el.scrollTop - el.clientHeight <
+						threshold
+					);
+				}
+				function scrollLogToBottom(force = false) {
+					const log = document.getElementById('log');
+					if (force || isNearBottom(log)) {
+						log.scrollTop = log.scrollHeight;
+					}
+				}
+
+				// ログ先頭に監視用の見えないセンチネルを設置し、
+				// 画面内に入ったタイミングで自動的に過去ログを読み込む
+				function ensureLoadMoreSentinel() {
+					const log = document.getElementById('log');
+					let sentinel = document.getElementById('logTopSentinel');
+					if (!sentinel) {
+						sentinel = document.createElement('div');
+						sentinel.id = 'logTopSentinel';
+						sentinel.className = 'logTopSentinel';
+					} else {
+						sentinel.remove();
+					}
+					if (logRenderedFrom > 0) {
+						log.insertBefore(sentinel, log.firstChild);
+					}
+					setupLogTopObserver(log, sentinel);
+				}
+
+				function setupLogTopObserver(log, sentinel) {
+					if (logTopObserver) {
+						logTopObserver.disconnect();
+						logTopObserver = null;
+					}
+					if (logRenderedFrom <= 0) return;
+					logTopObserver = new IntersectionObserver(
+						(entries) => {
+							for (const entry of entries) {
+								if (entry.isIntersecting) loadMoreLog();
+							}
+						},
+						{
+							root: log,
+							rootMargin: '200px 0px 0px 0px',
+							threshold: 0,
+						},
+					);
+					logTopObserver.observe(sentinel);
+				}
+
+				function loadMoreLog() {
+					if (logLoadingMore || logRenderedFrom <= 0) return;
+					logLoadingMore = true;
+					const log = document.getElementById('log');
+					const newFrom = Math.max(
+						0,
+						logRenderedFrom - LOG_LOAD_MORE_BATCH,
+					);
+					logRenderedFrom = newFrom;
+
+					// 現在のスクロール位置を保持するための基準
+					const prevHeight = log.scrollHeight;
+					const prevTop = log.scrollTop;
+
+					lastDayKey = null;
+					lastRenderedMsgUid = null;
+					lastRenderedMsgTs = 0;
+					log.innerHTML = '';
+					ensureLoadMoreSentinel();
+					const visible = logChronCache.slice(logRenderedFrom);
+					for (const m of visible) appendMessageEl(m, log);
+
+					const newHeight = log.scrollHeight;
+					log.scrollTop = prevTop + (newHeight - prevHeight);
+					logLoadingMore = false;
+				}
+
 				function appendMessageEl(m, log) {
 					maybeDaySeparator(m.ts, log);
 
@@ -1558,7 +1651,12 @@
 					lastRenderedMsgTs = 0;
 					const log = document.getElementById('log');
 					log.innerHTML = '';
-					const msgs = RoomStore.loadMessages(roomId)
+					if (logTopObserver) {
+						logTopObserver.disconnect();
+						logTopObserver = null;
+					}
+
+					logChronCache = RoomStore.loadMessages(roomId)
 						.filter(
 							(m) =>
 								m.k === 'chat' ||
@@ -1566,15 +1664,41 @@
 								m.k === 'system',
 						)
 						.sort((a, b) => a.ts - b.ts);
-					if (msgs.length === 0) {
+
+					if (logChronCache.length === 0) {
+						logRenderedFrom = 0;
 						const empty = document.createElement('div');
 						empty.id = 'logEmpty';
 						empty.textContent = 'まだメッセージがないようです。';
 						log.appendChild(empty);
 						return;
 					}
-					for (const m of msgs) appendMessageEl(m, log);
-					log.scrollTop = log.scrollHeight;
+
+					// 画面の高さ分くらいまでをひとまず描画し、残りは動的に読み込む
+					const viewportH = log.clientHeight || window.innerHeight || 600;
+					// 末尾から逆順に積算し、画面の高さを少し超えるまで件数を確保する
+					const approxRowH = 56; // メッセージ1件あたりのおおよその高さ(px)
+					const minByHeight = Math.ceil(
+						(viewportH + approxRowH) / approxRowH,
+					);
+					const initialCount = Math.max(
+						LOG_INITIAL_BATCH,
+						minByHeight,
+					);
+					logRenderedFrom = Math.max(
+						0,
+						logChronCache.length - initialCount,
+					);
+
+					ensureLoadMoreSentinel();
+					for (
+						let i = logRenderedFrom;
+						i < logChronCache.length;
+						i++
+					) {
+						appendMessageEl(logChronCache[i], log);
+					}
+					scrollLogToBottom(true);
 				}
 
 				/* ===================== sidebar open/close ===================== */
